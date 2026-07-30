@@ -1,0 +1,27 @@
+# Dependencies and generated output
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Local environment and deployment metadata
+.env
+.env.*
+!.env.example
+.vercel/
+
+# Logs, secrets, and local files
+*.log
+logs/
+.DS_Store
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local uploaded media
+sukun-backend/storage/*
+!sukun-backend/storage/.gitkeep
+

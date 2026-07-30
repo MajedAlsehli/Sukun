@@ -1,0 +1,17 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+.vercel/
+*.tsbuildinfo
+*.log
+logs/
+.DS_Store
+storage/*
+!storage/.gitkeep
+*.pem
+*.key
+*.p12
+*.pfx

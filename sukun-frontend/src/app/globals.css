@@ -1,0 +1,852 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===========================================================================
+   SUKUN (سُكن) design tokens — ported verbatim from the navy/gold rebrand
+   export (`Sakn Landing (standalone)-3.html`, extracted `__bundler/template`
+   payload; branding also documented in `SUKUN BY GHADA ALYAHYA.pdf`).
+   Supersedes the original green/bronze "Sakn" token block — same variable
+   names, same neutral/shadow/radius scale, only the g-/a-/t-/info- ramps
+   changed. Every converted screen uses these variables; never hard-code a
+   hex here or in any component.
+   =========================================================================== */
+:root {
+  /* Navy ramp — authority, primary action (was green) */
+  --g-50: #eef2f8;
+  --g-100: #dbe4f1;
+  --g-200: #b9c9e2;
+  --g-300: #849bc1;
+  --g-400: #5b7bb0;
+  --g-500: #3f516f;
+  --g-600: #2b3f61;
+  --g-700: #203d78;
+  --g-800: #152848;
+  --g-900: #0d1b34;
+
+  /* Gold ramp — warmth, warranty, invitations (was bronze) */
+  --a-50: #fdf7ee;
+  --a-100: #fae9cf;
+  --a-200: #ffd3a0;
+  --a-300: #e1ac6e;
+  --a-400: #d09a58;
+  --a-500: #b88448;
+  --a-600: #9c6e39;
+  --a-700: #7d582d;
+  --a-800: #5d4222;
+  --a-900: #3d2c17;
+
+  /* Logo artwork ink — the kit draws the arches and the "سُكن" wordmark in
+     its own near-black, deliberately distinct from the navy ramp so the navy
+     keystone reads against them. Logo only; never for text or UI. */
+  --brand-ink: #1e1e1d;
+
+  /* Warm neutrals — unchanged by the rebrand */
+  --n-bg: #f6efe8;
+  --n-bg2: #efe7dd;
+  --n-surface: #fcf8f2;
+  --n-surface2: #f4ede2;
+  --n-border: #e6dccf;
+  --n-border-strong: #d8cbb9;
+
+  /* Text */
+  --t-primary: #0d1b34;
+  --t-secondary: #4d5b72;
+  --t-tertiary: #8a93a3;
+  --t-on-dark: #f4f1ea;
+  --t-on-dark-soft: #b9c4d6;
+
+  /* Semantic */
+  --ok: #2f9e6a;
+  --ok-bg: #e6f4ec;
+  --warn: #c98a2b;
+  --warn-bg: #f8eddb;
+  --err: #bc4630;
+  --err-bg: #f7e6e1;
+  --info: #3868ca;
+  --info-bg: #e7edfb;
+
+  /* Semantic variants: `-strong` is the text shade that sits on the matching
+     `-bg`, `-border` its hairline, `-on-dark` the same status read against a
+     navy surface. Each of these existed before as three or four near-identical
+     hexes hardcoded per screen (#8a5d14 / #8a5c14, #1d6b48 / #1e7a4f /
+     #1f7a52, #8f3222 / #94382a …); unified here so a status chip is the same
+     colour in every screen that renders one. */
+  --ok-strong: #1f7a52;
+  --ok-border: #cde8d8;
+  --ok-on-dark: #7ee0aa;
+  --warn-strong: #8a5d14;
+  --warn-border: #eddcb3;
+  --warn-on-dark: #f3d19a;
+  --err-strong: #94382a;
+  --err-border: #e9c8bf;
+  --err-on-dark: #f0a292;
+
+  /* Deepest navy — closes the dark gradients below --g-900. */
+  --g-950: #08121f;
+
+  /* Channel triplets, for translucent brand washes: CSS can't apply an alpha
+     to a hex held in a variable, so overlays use rgba(var(--x-rgb), a). */
+  --g-900-rgb: 13, 27, 52;
+  --a-500-rgb: 184, 132, 72;
+  --t-on-dark-rgb: 244, 241, 234;
+
+  /* Radius */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --r-xl: 24px;
+  --r-2xl: 32px;
+  --r-full: 999px;
+
+  /* Elevation — tint follows --t-primary's navy (was the green ramp's own dark) */
+  --sh-1: 0 1px 2px rgba(13, 27, 52, 0.05), 0 1px 3px rgba(13, 27, 52, 0.04);
+  --sh-2: 0 2px 6px rgba(13, 27, 52, 0.06), 0 4px 12px rgba(13, 27, 52, 0.05);
+  --sh-3: 0 6px 16px rgba(13, 27, 52, 0.08), 0 12px 28px rgba(13, 27, 52, 0.06);
+  --sh-4: 0 12px 32px rgba(13, 27, 52, 0.1), 0 24px 56px rgba(13, 27, 52, 0.08);
+
+  /* Motion — single easing token used everywhere */
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /* next/font's generated variable (see layout.tsx) — not a design-doc token,
+     just how the real font family name reaches the CSS below.
+
+     The brand kit (p.3 "Font · Arabic / English") specifies the family only
+     as a Google Drive link, which isn't reachable from here, so the product
+     font stays IBM Plex Sans Arabic — one Arabic+Latin superfamily covering
+     both scripts at the five weights the screens use. Everything resolves
+     through this single variable: dropping the kit's own font files into
+     `layout.tsx` swaps the whole app in one edit, with no per-screen change.
+     (The logo is unaffected either way — its wordmark ships as outlines.) */
+  --font-arabic: var(--font-ibm-plex-arabic), system-ui, sans-serif;
+
+  /* Type scale — the hierarchy the screens already speak, named so new work
+     picks a step instead of a number. Sizes are px to match the inline
+     styles they describe; weight/line-height pair with each step. */
+  --fs-display: 46px; /* landing section openers      · 700 / 1.1  */
+  --fs-h1: 30px; /* screen title                 · 700 / 1.25 */
+  --fs-h2: 24px; /* section title                · 700 / 1.3  */
+  --fs-h3: 16px; /* card / block heading         · 700 / 1.4  */
+  --fs-body: 15px; /* default copy                 · 400 / 1.7  */
+  --fs-body-sm: 13.5px; /* dense rows, nav, table cells · 500 / 1.6  */
+  --fs-caption: 12.5px; /* meta, hints, chips           · 600 / 1.5  */
+}
+
+/* ===========================================================================
+   Base resets — 13_Design_Tokens.md §2, verbatim (font-family swapped to
+   reference the next/font variable instead of a bare family name).
+   =========================================================================== */
+* {
+  box-sizing: border-box;
+}
+html {
+  scroll-behavior: smooth;
+}
+body {
+  margin: 0;
+  background: var(--n-bg);
+  color: var(--t-primary);
+  font-family: var(--font-arabic);
+  -webkit-font-smoothing: antialiased;
+}
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+a {
+  color: var(--g-600);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--a-600);
+}
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--a-500);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+  }
+}
+
+/* ===========================================================================
+   Named keyframes — 11_Animation_Specification.md §1, verbatim.
+   rein/pmin/hoin/tcin/wsin are one definition ("one per module, identical
+   behaviour") kept as five distinct names so a converted screen can keep
+   using whichever name its source .dc.html file used, unchanged.
+   Screen-specific decorative animations (e.g. H1 Landing's floating hero
+   elements) are NOT part of this shared set — they're scoped locally to
+   their own page, exactly as they were in the source file.
+   =========================================================================== */
+@keyframes rein {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pmin {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes hoin {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes tcin {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes wsin {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes kpi {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes stepin {
+  from {
+    opacity: 0;
+    transform: translateX(-18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes tabin {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+@keyframes glow {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.72;
+    transform: scale(1.05);
+  }
+}
+/* Present in every source .dc.html's own <style> block (e.g. Sakn
+   Auth.dc.html) but dropped when Phase 2 centralized shared keyframes here
+   — AuthScreen's login/register button spinner has referenced this name
+   since Phase 2 with no matching definition anywhere, so it silently never
+   animated. */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ===========================================================================
+   AI-surface motion (2026-07-28 redesign). MOTION_INTENSITY 6 → fluid CSS
+   only: every keyframe below animates exclusively `transform` / `opacity`,
+   so nothing here triggers layout. `prefers-reduced-motion` honoured below.
+   =========================================================================== */
+
+/* The scanning bar that sweeps the photo during defect analysis. */
+@keyframes sk-scan {
+  0% {
+    transform: translateY(-110%);
+  }
+  100% {
+    transform: translateY(920%);
+  }
+}
+
+/* Slow ambient drift for the brand panel's light wash. */
+@keyframes sk-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-3%, 4%, 0) scale(1.08);
+  }
+}
+
+/* "Breathing" status dot — the assistant is alive but not shouting. */
+@keyframes sk-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.55);
+    opacity: 0.35;
+  }
+}
+
+/* Three-dot typing indicator. */
+@keyframes sk-typing {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+/* Staggered entrance for lists/cards — pair with an animation-delay cascade. */
+@keyframes sk-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Result reveal for the defect card. */
+@keyframes sk-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Bounding-box outline settling over the detected defect. */
+@keyframes sk-box {
+  from {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Skeleton sheen for loading placeholders. */
+@keyframes sk-sheen {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.sk-rise {
+  animation: sk-rise 0.55s var(--ease) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@layer components {
+  .container-shell {
+    @apply mx-auto w-full max-w-[1240px] px-5 sm:px-8 lg:px-10;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Task 3 (Step 10) — mobile overflow corrections.
+
+   Four routes were recorded in the Task 1 visual baseline as overflowing
+   horizontally at 390x844: /company (409), /contractor (401),
+   /discovery/[projectId] (713) and /report-monitor/[reportId] (553).
+
+   The cause is the same on all four: grids with a FIXED column count whose
+   cells cannot shrink below their min-content width, plus grid/flex children
+   that default to `min-width: auto` and so refuse to shrink at all.
+
+   SCOPE. Every rule is confined to (a) a mobile media query and (b) the
+   `data-sk-mobile-fit` subtrees, which are exactly the four screens above.
+   A first, unscoped version of this block changed the mobile layout of fifteen
+   OTHER screens that never overflowed — measured, and narrowed to this.
+
+   These are responsive constraints only: no card, navigation, spacing, colour
+   or typography is redesigned, and the approved 1440x900 desktop rendering is
+   untouched (verified against the frozen baseline: 26/26 desktop identical).
+   --------------------------------------------------------------------------- */
+@media (max-width: 560px) {
+  /* A three-, four- or five-across grid cannot fit 390px. Let it wrap rather
+     than force the page wider than the viewport. Each cell keeps its own
+     styling; only how many sit on a row changes. */
+  [data-sk-mobile-fit] [style*="grid-template-columns: repeat(3,"],
+  [data-sk-mobile-fit] [style*="grid-template-columns: repeat(4,"],
+  [data-sk-mobile-fit] [style*="grid-template-columns: repeat(5,"] {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important;
+  }
+
+  /* A two-column split leaves ~180px per side at 390px, below the min-content
+     width of several of these cards. */
+  [data-sk-mobile-fit] [style*="grid-template-columns: 1.35fr 1fr"],
+  [data-sk-mobile-fit] [style*="grid-template-columns: 1fr 1.3fr"],
+  [data-sk-mobile-fit] [style*="grid-template-columns: 1.5fr 1fr"],
+  [data-sk-mobile-fit] [style*="grid-template-columns: 290px 1fr"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  /* `min-width: auto` on a grid/flex item is what actually widens the page — a
+     long unit number or Arabic label refuses to shrink. This lets it shrink and
+     changes nothing for an item that already fits. */
+  [data-sk-mobile-fit] [style*="display: grid"] > *,
+  [data-sk-mobile-fit] [style*="display: flex"] > * {
+    min-width: 0;
+  }
+
+  /* A wide table scrolls in its own box, never the page. */
+  [data-sk-mobile-fit] table {
+    display: block;
+    overflow-x: auto;
+    max-width: 100%;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Pre-event stabilization — two further mobile corrections.
+
+   Both are additive, both are inside a mobile media query, and neither changes
+   the 1440x900 desktop rendering (verified: 24/24 desktop routes byte-identical
+   before/after).
+   --------------------------------------------------------------------------- */
+
+/* 1. iOS Safari zooms the whole page in when a focused input's font-size is
+      below 16px. Every form control in this app is authored at 13-14.5px, so
+      tapping any field on an iPhone zoomed the layout and left the user
+      scrolled sideways — which then reads as "the page overflows".
+
+      16px is the exact threshold, so this is the minimum change that stops the
+      zoom, and it keeps inputs comfortably readable rather than shrinking them.
+      Confined to touch-capable narrow viewports: pointer/hover keeps desktop
+      and hybrid devices on their authored sizes even in a narrow window.
+
+      `!important` is required, not stylistic: every control in this app carries
+      its size in an inline `style` attribute, which outranks any stylesheet
+      rule without it. */
+@media (max-width: 560px) and (hover: none) and (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* 2. H9 (/reports) overflowed the document by 2px at 375px. The fixed bottom
+      nav LOOKED like the cause — it measures 377px wide there — but hiding it
+      leaves the overflow unchanged: in RTL a `position: fixed; inset-inline: 0`
+      element stretches to the scrollable overflow area, so the nav was a
+      symptom, not the source.
+
+      The real source is H9's four-across summary grid
+      (`grid-template-columns: repeat(4,1fr)`), whose longest cell
+      ("بانتظار موافقتك") cannot shrink below its min-content width at 375px.
+      That is exactly the case the `data-sk-mobile-fit` block above already
+      handles, so H9's three root elements now opt into it rather than this file
+      growing a second, screen-specific rule. No new CSS is needed here. */
+
+/* ===========================================================================
+   iPhone stabilization — 375 / 390 / 393 px.
+   ===========================================================================
+
+   Everything below is a RESPONSIVE correction inside a `max-width` media
+   query. No card, nav, spacing, colour, typography or content hierarchy is
+   redesigned, and the approved 1440x900 rendering never sees a single one of
+   these rules.
+
+   The failures these close were captured on a real iPhone, and every one of
+   them is a fixed desktop measurement that cannot fit a phone:
+
+     * the landing page's 2-, 3-, 5- and 6-across grids, its four-column
+       footer, and its AI cards' English caption pills;
+     * `/login`, `/signup`, `/reset-password` keeping their desktop 44%/56%
+       split, which squeezed the form into ~170px;
+     * the project-details header tab row, its sticky CTA, the bottom nav and
+       the global session badge all occupying the same bottom band;
+     * the technician KPI/filter rows and the company tables and wizard.
+
+   Two rules of engagement, both from the brief:
+     - clipping is never "solved" with `overflow-x: hidden` on the page. A row
+       that genuinely cannot stack becomes a DELIBERATE horizontal scroller
+       with snap points, which is reachable; hidden overflow is not.
+     - important actions are never hidden to make a width check pass.
+   =========================================================================== */
+
+/* --- 1. Auth: the form is the page on a phone -----------------------------
+   `.sk-shell` is the 44%/56% brand-panel/form split. At 390px that gives the
+   form ~218px and the decorative panel ~172px of a photograph nobody can
+   read. On mobile the form becomes the single full-width column and the
+   marketing panel is removed from the layout — it carries no input, no
+   action and no information the form does not repeat. The desktop split is
+   untouched. */
+@media (max-width: 767px) {
+  .sk-shell {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .sk-shell > aside {
+    display: none !important;
+  }
+  .sk-shell > *:not(aside) {
+    min-width: 0;
+    padding-inline: 20px !important;
+  }
+}
+
+/* --- 2. Landing: stack what cannot fit ------------------------------------
+   Each of these is a fixed column count in an inline style. Overriding the
+   count is the whole correction — the cards themselves are unchanged. */
+@media (max-width: 767px) {
+  .sk-who,
+  .sk-grid3,
+  .sk-foot {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .sk-stats,
+  .sk-capstrip {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .sk-foot {
+    gap: 30px !important;
+  }
+  .sk-capstrip {
+    row-gap: 34px !important;
+  }
+  /* Grid and flex children default to `min-width: auto` and refuse to shrink
+     below their longest word; that is what pushes a card past the viewport. */
+  .sk-root [style*="display: grid"] > *,
+  .sk-root [style*="display: flex"] > * {
+    min-width: 0;
+  }
+  /* The AI cards' English caption ("Smart Recommendation") is a nowrap pill in
+     a space-between row. At 390px it is wider than the card, so it spilled
+     out. It wraps under the icon instead of being cut off or removed. */
+  .sk-grid3 > * > [style*="justify-content: space-between"] {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  /* Full-bleed decorative art must not define the page width. */
+  .sk-hero > div:first-child {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+  /* Desktop display sizes overflow a phone; these are the same headings at a
+     phone-appropriate size, not a different type system. */
+  .sk-root h1 {
+    font-size: clamp(30px, 8.5vw, 46px) !important;
+  }
+  .sk-root h2 {
+    font-size: clamp(25px, 7vw, 46px) !important;
+  }
+}
+
+/* --- 2b. Mobile / desktop visibility utilities ----------------------------
+   The two classes that let a screen host a MOBILE-ONLY control (the header
+   account menu) without touching its desktop composition, and vice versa.
+   Nothing else in this file changes what is rendered — only how it lays out —
+   so these are the only display switches, and both are inside a breakpoint. */
+@media (max-width: 767px) {
+  .sk-only-desktop {
+    display: none !important;
+  }
+}
+
+@media (min-width: 768px) {
+  .sk-only-mobile {
+    display: none !important;
+  }
+}
+
+/* --- 2c. The floating session badge is a DESKTOP affordance ---------------
+   On a phone it covered buttons and page content, overlapped the bottom
+   navigation, sat on top of filters and booking controls, was tapped by
+   accident, and opened a panel people could not reliably dismiss. Its function
+   moves into each screen's header (`components/auth/AccountMenu.tsx`) at
+   mobile width. The desktop badge is untouched.
+
+   `display: none` — not opacity or visibility — so it also stops receiving
+   pointer events, which is half of what made it a hazard. */
+@media (max-width: 767px) {
+  [data-sk-session-menu] {
+    display: none !important;
+  }
+}
+
+/* --- 2d. Discovery search: filters above results, not beside them ---------
+   The search screen is authored as a `230px 1fr` split. At 390px that leaves
+   the results column ~130px, and the project card rendered as a clipped strip
+   with its name, image, price and buttons unreadable. On mobile the split
+   becomes one column and the filter panel collapses behind its own toggle, so
+   the cards get the full width back. The panel is the SAME filter UI — nothing
+   was redesigned and no filter was removed. */
+@media (max-width: 767px) {
+  [data-sk-search-split] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .sk-filter-collapsed {
+    display: none !important;
+  }
+}
+
+/* --- 3. One bottom stacking system ----------------------------------------
+   Three fixed elements can share the bottom of the screen: the homeowner
+   bottom nav (z 120), a screen's own fixed CTA bar, and the global session
+   badge (z 200). They were drawn on top of one another and on top of the page:
+   the CTA covered the content, the nav covered the CTA, the badge covered
+   both, and the "احجز زيارة" button was unreachable underneath.
+
+   Bottom-up order: nav, CTA bar above it, badge above that, and document
+   padding under everything so the last row of real content clears all three.
+
+   The two heights are MEASURED, not assumed — `components/mobile/BottomStack`
+   writes them onto <body> from the live elements. Constants were wrong in both
+   directions: the nav is 62px plus `env(safe-area-inset-bottom)` (0 in a
+   desktop browser, 34 on a notched iPhone) and the project-details CTA bar is
+   74px on one line but 129px once it wraps at 390px. The fallbacks below are
+   only what applies for the first frame before the measurement lands. */
+:root {
+  --sk-bottom-nav-h: 0px;
+  /* The sticky header (+ any sticky tab row) at the top of a screen. */
+  --sk-sticky-top-h: 0px;
+  --sk-cta-h: 0px;
+  /* The PM assistant, but only in its full-width mobile form. */
+  --sk-assistant-h: 0px;
+  /* The session badge occupies bottom space too — it covered the
+     "سياسة الخصوصية" link on /activate before this was reserved. */
+  --sk-badge-h: 0px;
+  --sk-safe-b: env(safe-area-inset-bottom, 0px);
+  /* Breathing room between stacked layers. */
+  --sk-stack-gap: 12px;
+}
+
+/* The CTA bar and the badge are fixed at EVERY width, so they can collide at
+   every width — at 1440x900 the badge sat on top of the project CTA bar and
+   the bar covered the "إلغاء الزيارة" button. These three are therefore not
+   inside a mobile query: they are a functional correction, and where no bottom
+   nav and no CTA bar exist (which is every desktop screen except these two)
+   both measured heights are 0 and the rules resolve to the original values. */
+[data-sk-cta-bar] {
+  bottom: var(--sk-bottom-nav-h) !important;
+  z-index: 130 !important;
+}
+
+[data-sk-session-menu] {
+  bottom: calc(
+    var(--sk-bottom-nav-h) + var(--sk-cta-h) + var(--sk-assistant-h) + var(--sk-stack-gap) + 4px
+  ) !important;
+}
+
+body[data-sk-cta-bar-present] [data-sk-mobile-fit] {
+  padding-bottom: calc(
+    var(--sk-bottom-nav-h) + var(--sk-cta-h) + var(--sk-badge-h) + var(--sk-stack-gap) + 16px
+  ) !important;
+}
+
+@media (max-width: 767px) {
+  /* Enough document padding that content is never permanently buried under the
+     bottom nav, the assistant sheet or the session badge, on every screen that
+     opts into the mobile corrections. */
+  [data-sk-mobile-fit] {
+    padding-bottom: calc(
+      var(--sk-bottom-nav-h) + var(--sk-assistant-h) + var(--sk-badge-h) + var(--sk-stack-gap) +
+        16px
+    ) !important;
+  }
+}
+
+/* --- 3b. Scroll targets must clear the pinned bands -----------------------
+   `scrollIntoView` and `#anchor` navigation align an element to the TOP of the
+   viewport — which on these screens is behind a sticky header and, on the
+   project page, behind a sticky section-tab row as well. Tapping "احجز زيارة"
+   therefore landed the booking form's first time slots underneath them, and a
+   real tap on those slots hit the header instead. The same at the other end:
+   the confirm button landed under the fixed bottom navigation.
+
+   Both offsets are the MEASURED heights `BottomStack` publishes, so they stay
+   correct as those bands change. Mobile only: at desktop width there is no
+   fixed bottom nav and the header does not overlap a scrolled target. */
+@media (max-width: 767px) {
+  [data-sk-mobile-fit] section[id],
+  [data-sk-mobile-fit] [id^="sec-"],
+  [data-sk-mobile-fit] button,
+  [data-sk-mobile-fit] a[href],
+  [data-sk-mobile-fit] input,
+  [data-sk-mobile-fit] select,
+  [data-sk-mobile-fit] textarea {
+    scroll-margin-top: calc(var(--sk-sticky-top-h, 0px) + 12px);
+    scroll-margin-bottom: calc(
+      var(--sk-bottom-nav-h) + var(--sk-cta-h) + var(--sk-stack-gap) + 12px
+    );
+  }
+}
+
+/* --- 4. Rows that must scroll, deliberately -------------------------------
+   A tab row, a filter-pill row or a wide table cannot stack without losing
+   its meaning. Rather than clipping it, it becomes its own scroller with snap
+   points, scroll padding for RTL and a visible affordance. Every item stays
+   reachable — nothing is hidden to satisfy a width check. */
+@media (max-width: 767px) {
+  [data-sk-scroll-row] {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scroll-padding-inline: 16px;
+    padding-bottom: 4px;
+    /* The row scrolls; the page does not. */
+    max-width: 100%;
+  }
+  [data-sk-scroll-row] > * {
+    scroll-snap-align: start;
+    flex: 0 0 auto;
+  }
+  /* A horizontal scrollbar inside the page body reads as a layout bug on iOS,
+     where scrollbars are overlays anyway. The row still scrolls by touch. */
+  [data-sk-scroll-row]::-webkit-scrollbar {
+    display: none;
+  }
+  [data-sk-scroll-row] {
+    scrollbar-width: none;
+  }
+}
+
+/* --- 5. Wide desktop tables become their own scroller --------------------- */
+@media (max-width: 767px) {
+  [data-sk-mobile-fit] table {
+    display: block;
+    overflow-x: auto;
+    max-width: 100%;
+  }
+  /* A cell authored with a fixed pixel min-width cannot fit a phone. */
+  [data-sk-mobile-fit] [style*="min-width: 2"],
+  [data-sk-mobile-fit] [style*="min-width: 3"],
+  [data-sk-mobile-fit] [style*="min-width: 4"] {
+    min-width: 0 !important;
+  }
+  /* Long unbroken tokens (an email, a code) must wrap rather than widen the
+     page. Applied to text containers only — never to a nowrap control row,
+     which is handled by rule 4 above. */
+  [data-sk-mobile-fit] p,
+  [data-sk-mobile-fit] h1,
+  [data-sk-mobile-fit] h2,
+  [data-sk-mobile-fit] h3,
+  [data-sk-mobile-fit] td,
+  [data-sk-mobile-fit] th {
+    overflow-wrap: anywhere;
+  }
+}
+
+/* --- 5b. A list row whose trailing action squeezes its text ---------------
+   A row built as [thumbnail | text | action] has ~300px to divide at 390px.
+   The thumbnail and the action are both `flex: none`, so the text column ends
+   up around 80px and every word lands on its own line — the repair-history
+   rows in the iPhone evidence. On mobile the trailing action moves to its own
+   full-width line beneath, which returns the whole row width to the text. The
+   desktop row is unchanged. */
+@media (max-width: 767px) {
+  [data-sk-stack-row] {
+    flex-wrap: wrap !important;
+    align-items: flex-start !important;
+  }
+  [data-sk-stack-row] > :last-child {
+    flex: 1 0 100% !important;
+    margin-top: 12px;
+  }
+}
+
+/* --- 6. The PM assistant card --------------------------------------------
+   A 320px-wide fixed card pinned bottom-right covered the reports list and
+   its actions on a phone. On mobile it becomes a full-width in-flow-feeling
+   sheet pinned to the bottom, clearing the same bottom stack as everything
+   else. Its desktop appearance is unchanged. */
+@media (max-width: 767px) {
+  [data-sk-assistant-card] {
+    inset-inline: 12px !important;
+    width: auto !important;
+    bottom: calc(var(--sk-bottom-nav-h) + var(--sk-stack-gap)) !important;
+    max-height: 45dvh;
+    overflow-y: auto;
+  }
+}

@@ -1,0 +1,1599 @@
+// Sakn Platform - Database Schema
+// Rules: 07_Database_Architecture.md, 10_ERD.md
+// DB-001 UUID PKs | DB-002 created_at/updated_at | DB-003 no delete on historical entities
+// DB-004 FKs mandatory | DB-007 images never stored in DB (metadata only)
+
+generator client {
+  provider      = "prisma-client-js"
+  // Task 10: Vercel's Node runtime is Amazon Linux, not the local macOS/glibc
+  // target, so the query engine for it has to be generated at build time too.
+  // Without this the deployed function fails at the first query with
+  // "Query engine binary for current platform could not be found".
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  // Task 10: the RUNNING app connects through the pooled URL. In production
+  // that must be Supabase's TRANSACTION pooler (port 6543, `?pgbouncer=true`)
+  // so a serverless deployment does not exhaust the documented 15-client
+  // session-mode ceiling.
+  url       = env("DATABASE_URL")
+  // `prisma migrate deploy` needs a real session (advisory locks, DDL) that a
+  // transaction pooler cannot provide, so migrations go over the DIRECT
+  // connection (port 5432). Locally both point at the same database.
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  HOME_SEEKER
+  HOMEOWNER
+  TECHNICIAN
+  PROJECT_MANAGER
+  COMPANY
+}
+
+enum UserStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+// Full progression per 11_State_Machines.md #SEARCH JOURNEY:
+// Created -> Preferences Completed -> Recommendations Generated -> Visits ->
+// Inspection -> Purchased -> Closed, with Cancelled as a side-exit from any
+// non-terminal stage. CLOSED and CANCELLED are the only terminal states
+// (SEA-003: closed journeys become read-only); everything else counts as
+// "Active" for SEA-002's one-active-journey rule.
+enum SearchJourneyStatus {
+  CREATED
+  PREFERENCES_COMPLETED
+  RECOMMENDATIONS_GENERATED
+  VISITING
+  INSPECTING
+  PURCHASED
+  CLOSED
+  CANCELLED
+}
+
+// 11_State_Machines.md #COMPANY
+enum CompanyStatus {
+  CREATED
+  VERIFIED
+  ACTIVE
+  SUSPENDED
+}
+
+// 11_State_Machines.md #PROJECT (COM-009/010: archived stays searchable, read-only)
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+// 11_State_Machines.md #BUILDING - same shape as Project. 07_Database_Architecture.md's
+// literal Buildings column list (id, project_id, name, number) omits status, but
+// 00_Product_Foundation.md's "Architecture Rule" requires every canonical entity to
+// map to a State Machine with no exception - added per that rule, not invented.
+enum BuildingStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+// 11_State_Machines.md #UNIT - a physical-occupancy lifecycle, not the
+// Draft/Active/Archived publishing lifecycle Project/Building use. No terminal
+// "archived" state exists here by design (see Task 005 report on deletion).
+enum UnitStatus {
+  AVAILABLE
+  RESERVED
+  DELIVERED
+  OCCUPIED
+}
+
+// 11_State_Machines.md #VISIT. SCHEDULED exists for schema fidelity to the
+// diagram but is currently unreachable through the API: no endpoint/trigger
+// for a separate "confirm" step is documented anywhere (no payment/approval
+// gate exists at booking time in this MVP), so bookings go straight to
+// CONFIRMED - same "modeled but not currently reachable" pattern as
+// SearchJourneyStatus.PURCHASED.
+enum VisitStatus {
+  SCHEDULED
+  CONFIRMED
+  CHECKED_IN
+  CHECKED_OUT
+  COMPLETED
+  CANCELLED
+}
+
+// Task 6 (docs/integration/decisions.md G3): H4's readiness/handover section.
+// Nullable - no company-side control sets this yet (G4); honest null until one does.
+enum ProjectReadiness {
+  READY
+  UNDER_CONSTRUCTION
+  OFF_PLAN
+}
+
+// Task 6 (decisions.md G3/G10): the 5 category tiles in
+// `Sakn Visit Experience.dc.html`'s issue modal.
+enum VisitIssueCategory {
+  FINISHING
+  ELECTRICAL
+  PLUMBING
+  PLAN_MISMATCH
+  OTHER
+}
+
+// Task 6 (decisions.md G3/G11): the 3 suitability options in the same
+// screen's rating phase ("هل المشروع مناسب لك؟").
+enum VisitSuitability {
+  YES
+  SOMEWHAT
+  NO
+}
+
+// 11_State_Machines.md #INSPECTION REPORT, plus WAITING_MANUAL_REVIEW (INS-025:
+// explicitly named by rule ID, not part of the main diagram) and REJECTED
+// (named in the diagram's "Rejected Flow" branch). DRAFT is modeled for
+// fidelity but unreachable: 08_API_Specification.md's single POST endpoint
+// takes images/notes/location all at once, so reports start at SUBMITTED -
+// same "modeled but not currently reachable" pattern used for Visit.SCHEDULED.
+enum InspectionReportStatus {
+  DRAFT
+  SUBMITTED
+  AI_PROCESSING
+  WAITING_MANUAL_REVIEW
+  ASSIGNED
+  REPAIR_IN_PROGRESS
+  WAITING_APPROVAL
+  REJECTED
+  CLOSED
+}
+
+// INS-011
+enum InspectionPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// 00_Product_Foundation.md #10.14 AI Analysis types: Recommendation/Inspection/
+// Warranty/Validation. INSPECTION (Task 008), REPAIR_VALIDATION (Task 009) and
+// WARRANTY (Task 010) are wired up; RECOMMENDATION has no module yet.
+enum AIAnalysisType {
+  RECOMMENDATION
+  INSPECTION
+  WARRANTY
+  REPAIR_VALIDATION
+}
+
+// 11_State_Machines.md #TECHNICIAN
+enum TechnicianStatus {
+  INVITED
+  ACTIVATED
+  AVAILABLE
+  BUSY
+  INACTIVE
+}
+
+// 11_State_Machines.md #PROJECT MANAGER
+enum ProjectManagerStatus {
+  INVITED
+  ACTIVATED
+  ACTIVE
+  INACTIVE
+}
+
+// 11_State_Machines.md #REPAIR
+enum RepairStatus {
+  ASSIGNED
+  ACCEPTED
+  IN_PROGRESS
+  WAITING_VALIDATION
+  WAITING_CUSTOMER_APPROVAL
+  COMPLETED
+  REJECTED
+}
+
+enum RepairImageType {
+  BEFORE
+  AFTER
+}
+
+// HOM-001: one active owner per unit - enforced with a friendly service-layer
+// pre-check (see Task 011 report) AND, since Task 5 (decisions.md F4), a real
+// database constraint: a raw-SQL partial unique index,
+// `ownerships_active_unit_unique` (`ON ownerships (unit_id) WHERE status =
+// 'ACTIVE'`), which is the actual safety net under concurrent requests - the
+// pre-check only exists to turn a raw constraint-violation 500 into a
+// friendly 409 UNIT_ALREADY_OWNED. ENDED covers the (undocumented but
+// implied) case of a unit changing hands again.
+enum OwnershipStatus {
+  ACTIVE
+  ENDED
+}
+
+// 11_State_Machines.md #HOMEOWNER ACTIVATION, simplified: "Password Created"
+// isn't a separately stored status here - creating the password and
+// redeeming the code happen in one API call (see HomeownerActivationDto),
+// there's no distinct trigger for a resting state in between.
+enum HomeownerActivationStatus {
+  PENDING
+  ACTIVATED
+  EXPIRED
+}
+
+// 11_State_Machines.md #WARRANTY REPORT. "Created" and "Eligibility
+// Validation" collapse into one step: WAR-002 requires eligibility to be
+// checked BEFORE report creation, so an ineligible claim never becomes a
+// stored report at all (rejected outright) rather than sitting in a
+// rejected-eligibility resting state - same reasoning as Inspection's
+// DRAFT/SUBMITTED collapse in Task 007.
+enum WarrantyReportStatus {
+  AI_ANALYSIS
+  WAITING_MANUAL_REVIEW
+  ASSIGNED
+  REPAIR_IN_PROGRESS
+  WAITING_HOMEOWNER
+  REJECTED
+  CLOSED
+}
+
+// ---------------------------------------------------------------------------
+// Task 001: Authentication Module
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String     @id @default(uuid())
+  name         String
+  email        String     @unique
+  phone        String     @unique
+  passwordHash String     @map("password_hash")
+  role         UserRole   @default(HOME_SEEKER)
+  status       UserStatus @default(ACTIVE)
+
+  // Task 5 (docs/integration/decisions.md F1): RE4 requires this at homeowner
+  // creation, immutable afterward - no prior column existed anywhere. Null
+  // for every self-registered (HOME_SEEKER via /auth/register) account; only
+  // company-created homeowners (POST /api/homeowners) ever set it.
+  nationalId String? @unique @map("national_id")
+
+  // SEC-007: failed login lockout
+  failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime? @map("locked_until")
+
+  // Resolves a COMPANY-role user to "their" company (07_Database_Architecture.md's
+  // Companies table has no user linkage of its own - added here per product
+  // decision: one company-role user maps to exactly one Company via this FK).
+  // Null for every other role.
+  companyId String? @map("company_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  company              Company?              @relation(fields: [companyId], references: [id])
+  refreshTokens        RefreshToken[]
+  passwordResetTokens  PasswordResetToken[]
+  invitationTokens     InvitationToken[]
+  searchJourneys       SearchJourney[]
+  visits               Visit[]
+  auditLogs            AuditLog[]
+  technician           Technician?
+  projectManager       ProjectManager?
+  ownerships           Ownership[]
+  homeownerActivations HomeownerActivation[]
+  warrantyReports      WarrantyReport[]
+  notifications        Notification[]
+  savedProjects        SavedProject[]
+  visitNotes           VisitNote[]
+  visitIssues          VisitIssue[]
+  visitFeedback        VisitFeedback[]
+
+  // Task 8 (decisions.md I1): canonical post-ownership report domain.
+  reports              Report[]
+  reportAnalyses       ReportAnalysis[]
+  reportReviews        ReportReview[]
+  reportTimelineEvents ReportTimelineEvent[]
+  reportMediaUploads   ReportMedia[]
+
+  @@map("users")
+}
+
+// Required by SEC-002/SEC-003 (JWT expiry + single-use refresh tokens) but not
+// explicitly listed as a core table in 07_Database_Architecture.md - added as
+// the minimum persistence needed for rotating/revoking refresh tokens safely.
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// Required by the /forgot-password -> /reset-password flow (SEC-006: sessions
+// invalidated after reset). Same rationale as RefreshToken: not an explicitly
+// listed core table, but the minimum persistence the flow needs.
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// Task 003 (this integration effort): purpose-bound invitation tokens - the
+// foundation for "company creates an account, the person sets their own
+// password via a link" flows. Only TECHNICIAN_ACTIVATION is wired end-to-end
+// this task (see auth/invitation.repository.ts). Homeowner ownership
+// invitation's foundation is the pre-existing HomeownerActivation model
+// (code+QR, already crypto-secure/hashed/expiring/single-use/purpose-bound)
+// - not duplicated here; see docs/integration/decisions.md.
+enum InvitationPurpose {
+  TECHNICIAN_ACTIVATION
+}
+
+model InvitationToken {
+  id        String            @id @default(uuid())
+  userId    String            @map("user_id")
+  purpose   InvitationPurpose
+  tokenHash String            @unique @map("token_hash")
+  expiresAt DateTime          @map("expires_at")
+  usedAt    DateTime?         @map("used_at")
+  revokedAt DateTime?         @map("revoked_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("invitation_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// Task 002: Search Journey Module
+// ---------------------------------------------------------------------------
+
+model SearchJourney {
+  id        String              @id @default(uuid())
+  userId    String              @map("user_id")
+  status    SearchJourneyStatus @default(CREATED)
+  startedAt DateTime            @default(now()) @map("started_at")
+  closedAt  DateTime?           @map("closed_at")
+
+  user              User               @relation(fields: [userId], references: [id])
+  visits            Visit[]
+  inspectionReports InspectionReport[]
+
+  @@index([userId])
+  @@map("search_journeys")
+}
+
+// ---------------------------------------------------------------------------
+// Task 003: Projects Module (+ Company, its parent per the ERD)
+// ---------------------------------------------------------------------------
+
+model Company {
+  id                     String        @id @default(uuid())
+  name                   String
+  commercialRegistration String        @unique @map("commercial_registration")
+  status                 CompanyStatus @default(CREATED)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users                   User[]
+  projects                Project[]
+  contractorOrganizations ContractorOrganization[]
+
+  @@map("companies")
+}
+
+model Project {
+  id        String        @id @default(uuid())
+  companyId String        @map("company_id")
+  name      String
+  // COM-006: unique project code. Docs don't say scoped-per-company vs global;
+  // enforcing globally unique as the safer superset - see report.
+  code      String        @unique
+  city      String
+  status    ProjectStatus @default(DRAFT)
+
+  // Task 4 (docs/integration/decisions.md E1): orthogonal to `status`.
+  // Meaningful only while status=ACTIVE - the reversible "temporarily
+  // deactivated" toggle. ARCHIVED remains a separate, terminal, one-way
+  // state (unchanged) - see project.types.ts.
+  isActive Boolean @default(true) @map("is_active")
+
+  // Task 4 (E5): collected by RE2 wizard step 1, no prior columns existed.
+  district      String?
+  description   String?
+  coverImageKey String? @map("cover_image_key")
+  coverImageUrl String? @map("cover_image_url")
+
+  // Task 4 (E2): RE2 wizard step 5 - a contractor organization, not a technician.
+  primaryContractorId String? @map("primary_contractor_id")
+
+  // Task 4 (E6): source-tracking boundary for a future Sakani-backed import.
+  // Every project created through RE2's wizard today is "MANUAL" with no
+  // external id - see decisions.md E6.
+  source          String    @default("MANUAL")
+  externalId      String?   @unique @map("external_id")
+  sourceUpdatedAt DateTime? @map("source_updated_at")
+  lastSyncedAt    DateTime? @map("last_synced_at")
+
+  // Task 6 (decisions.md G3/G4): H3/H4 readiness section + amenities grid.
+  // Nullable/empty until a company sets them via the minimal PATCH extension
+  // in G4 - no fabricated defaults.
+  readiness ProjectReadiness?
+  amenities String[]          @default([])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  company           Company                 @relation(fields: [companyId], references: [id])
+  primaryContractor ContractorOrganization? @relation(fields: [primaryContractorId], references: [id])
+  buildings         Building[]
+  visits            Visit[]
+  technicians       Technician[]
+  projectManager    ProjectManager?
+  media             ProjectMedia[]
+  savedBy           SavedProject[]
+  // Task 8 (decisions.md I1): immutable historical project reference on every
+  // canonical report - a later transfer never repoints an existing report.
+  reports           Report[]
+
+  @@index([companyId])
+  @@index([primaryContractorId])
+  @@map("projects")
+}
+
+// Task 6 (decisions.md G3/G7): real, empty-by-default gallery structure -
+// nothing writes to this yet (no upload endpoint this task; H4 is view-only).
+// Exists so a future Sakani import or company-upload feature has somewhere
+// real to write to. isPlaceholder distinguishes genuine photography from a
+// future stand-in image, never silently conflated (DB-007: images never
+// stored in DB, this is metadata/URL only, same as File).
+model ProjectMedia {
+  id            String  @id @default(uuid())
+  projectId     String  @map("project_id")
+  url           String
+  isPlaceholder Boolean @default(true) @map("is_placeholder")
+  sortOrder     Int     @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+  @@map("project_media")
+}
+
+// Task 6 (decisions.md G3/G6): H3/H4's favorite/save toggle. The unique
+// constraint is what makes save/unsave idempotent by construction (upsert /
+// delete-if-exists), not just an application-level check.
+model SavedProject {
+  id        String @id @default(uuid())
+  userId    String @map("user_id")
+  projectId String @map("project_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@unique([userId, projectId])
+  @@index([userId])
+  @@index([projectId])
+  @@map("saved_projects")
+}
+
+// ---------------------------------------------------------------------------
+// Task 4 (this integration effort): Contractor Organizations
+// decisions.md E2 - a real, company-scoped entity distinct from Technician
+// (individual, project-scoped operational user). Read-only picker only
+// (GET /api/contractors?q) - no management CRUD screen, no delete.
+// ---------------------------------------------------------------------------
+
+model ContractorOrganization {
+  id        String  @id @default(uuid())
+  companyId String  @map("company_id")
+  name      String
+  phone     String
+  email     String
+  isActive  Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  company  Company   @relation(fields: [companyId], references: [id])
+  projects Project[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("contractor_organizations")
+}
+
+// ---------------------------------------------------------------------------
+// Task 004: Buildings Module
+// ---------------------------------------------------------------------------
+
+model Building {
+  id        String         @id @default(uuid())
+  projectId String         @map("project_id")
+  name      String
+  // COM-007: unique building number - scoped per-project (buildings across
+  // different projects legitimately reuse numbers like "1", "A").
+  number    String
+  status    BuildingStatus @default(DRAFT)
+
+  // Task 4 (decisions.md E1): same isActive/status decoupling as Project.
+  isActive Boolean @default(true) @map("is_active")
+
+  // Task 4 (decisions.md E5): RE2 wizard step 2 collects this; RE3's building
+  // card displays it. Nullable - buildings created before this task have none.
+  floors Int?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  project Project  @relation(fields: [projectId], references: [id])
+  units   Unit[]
+  reports Report[]
+
+  @@unique([projectId, number])
+  @@index([projectId])
+  @@map("buildings")
+}
+
+// ---------------------------------------------------------------------------
+// Task 005: Units Module
+// ---------------------------------------------------------------------------
+
+model Unit {
+  id         String     @id @default(uuid())
+  buildingId String     @map("building_id")
+  // COM-008: unique unit number, scoped per-building.
+  number     String
+  floor      Int
+  // No enum of valid property types is defined anywhere in the docs; kept as
+  // free text matching the literal DB column, not invented.
+  type       String
+  status     UnitStatus @default(AVAILABLE)
+
+  // Task 4 (decisions.md E5): RE2 wizard step 3 per-building generation config;
+  // RE3's unit card spec chips. No prior columns existed for any of these.
+  area         Float?
+  bedrooms     Int?
+  bathrooms    Int?
+  parkingSpots Int?   @map("parking_spots")
+
+  // Task 6 (decisions.md G3/G4/G5): H3/H4 price display + priceBand filter.
+  // No prior price column existed on the app's own inventory (only on the
+  // separate Sakani* market-data mirror) - nullable, honest-null until a
+  // company sets it via the minimal generation-schema extension in G4.
+  price Float?
+
+  // Task 4 (decisions.md E6): same source-tracking boundary as Project.
+  source          String    @default("MANUAL")
+  externalId      String?   @unique @map("external_id")
+  sourceUpdatedAt DateTime? @map("source_updated_at")
+  lastSyncedAt    DateTime? @map("last_synced_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  building             Building              @relation(fields: [buildingId], references: [id])
+  visits               Visit[]
+  inspectionReports    InspectionReport[]
+  ownerships           Ownership[]
+  homeownerActivations HomeownerActivation[]
+  warranty             Warranty?
+  warrantyReports      WarrantyReport[]
+  reports              Report[]
+
+  @@unique([buildingId, number])
+  @@index([buildingId])
+  @@map("units")
+}
+
+// ---------------------------------------------------------------------------
+// Task 006: Visits Module
+// ---------------------------------------------------------------------------
+
+model Visit {
+  id              String @id @default(uuid())
+  userId          String @map("user_id")
+  // 07_Database_Architecture.md lists project_id/unit_id directly on Visits
+  // (denormalized rather than derived through Unit -> Building -> Project).
+  projectId       String @map("project_id")
+  unitId          String @map("unit_id")
+  // 10_ERD.md declares "Search Journey 1:N Visits" but 07_Database_Architecture.md's
+  // literal column list omits it - added for real, same rationale as the
+  // RefreshToken/PasswordResetToken additions in Task 001: the relationship is
+  // required (SearchJourney.advanceStatus needs to know which journey a visit
+  // belongs to), just missing from the literal column list.
+  searchJourneyId String @map("search_journey_id")
+
+  date DateTime
+  time String
+
+  status       VisitStatus @default(CONFIRMED)
+  checkedInAt  DateTime?   @map("checked_in_at")
+  checkedOutAt DateTime?   @map("checked_out_at")
+
+  // Task 6 (decisions.md G3/G9): reschedule history - a counter + last
+  // timestamp, same "no new history table" pattern as F3's Ownership.endReason.
+  rescheduleCount   Int       @default(0) @map("reschedule_count")
+  lastRescheduledAt DateTime? @map("last_rescheduled_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user              User               @relation(fields: [userId], references: [id])
+  project           Project            @relation(fields: [projectId], references: [id])
+  unit              Unit               @relation(fields: [unitId], references: [id])
+  searchJourney     SearchJourney      @relation(fields: [searchJourneyId], references: [id])
+  inspectionReports InspectionReport[]
+  notes             VisitNote[]
+  issues            VisitIssue[]
+  feedback          VisitFeedback?
+
+  @@index([userId])
+  @@index([unitId])
+  @@index([searchJourneyId])
+  @@map("visits")
+}
+
+// Task 6 (decisions.md G3/G10): visit-owner-only observations. FKs only to
+// Visit/User - no relation of any kind to InspectionReport/WarrantyReport/
+// Repair exists or is ever added (A9: notes/issues never become reports).
+model VisitNote {
+  id              String  @id @default(uuid())
+  visitId         String  @map("visit_id")
+  userId          String  @map("user_id")
+  text            String?
+  /// Task 10 (decisions.md K3): visit photos moved to the PRIVATE Supabase
+  /// bucket, which has no durable public URL. The storage KEY is the durable
+  /// reference; `photoUrl` now holds a short-lived signed URL for rows created
+  /// before the move (and stays null for private-bucket rows).
+  photoUrl        String? @map("photo_url")
+  photoStorageKey String? @map("photo_storage_key")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  visit Visit @relation(fields: [visitId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@index([visitId])
+  @@map("visit_notes")
+}
+
+model VisitIssue {
+  id              String             @id @default(uuid())
+  visitId         String             @map("visit_id")
+  userId          String             @map("user_id")
+  category        VisitIssueCategory
+  description     String?
+  /// See VisitNote.photoStorageKey - same Task 10 private-bucket move.
+  photoUrl        String?            @map("photo_url")
+  photoStorageKey String?            @map("photo_storage_key")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  visit Visit @relation(fields: [visitId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@index([visitId])
+  @@map("visit_issues")
+}
+
+// Task 6 (decisions.md G3/G11): one real row per visit - the unique
+// constraint on visitId is the actual "one feedback per visit" guarantee
+// (same two-layer pattern as F4's partial unique index), not just a
+// service-layer check. No edit/update path exists - see decisions.md G11.
+model VisitFeedback {
+  id          String            @id @default(uuid())
+  visitId     String            @unique @map("visit_id")
+  userId      String            @map("user_id")
+  rating      Int
+  comment     String?
+  suitability VisitSuitability?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  visit Visit @relation(fields: [visitId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("visit_feedback")
+}
+
+// ---------------------------------------------------------------------------
+// Task 007: Files (Storage - no dedicated task number in 15_Backend_Tasks.md,
+// built here since Inspection Reports depends on it). Local-disk MVP per
+// product decision; images/metadata only, never raw bytes (DB-007).
+// ---------------------------------------------------------------------------
+
+model File {
+  id         String @id @default(uuid())
+  storageKey String @unique @map("storage_key")
+  url        String
+  hash       String
+  mimeType   String @map("mime_type")
+  size       Int
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  inspectionImages InspectionImage[]
+  repairImages     RepairImage[]
+  warrantyImages   WarrantyImage[]
+
+  @@map("files")
+}
+
+// ---------------------------------------------------------------------------
+// Task 007: Inspection Reports Module
+// ---------------------------------------------------------------------------
+
+model InspectionReport {
+  id              String @id @default(uuid())
+  visitId         String @map("visit_id")
+  unitId          String @map("unit_id")
+  // INS-003: Inspection Reports belong to Search Journey.
+  searchJourneyId String @map("search_journey_id")
+
+  status   InspectionReportStatus @default(SUBMITTED)
+  // INS-012: suggested by AI, finalized by business - not necessarily set at creation.
+  priority InspectionPriority?
+  // INS-024: report location inside the unit is mandatory.
+  location String
+  notes    String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  visit         Visit             @relation(fields: [visitId], references: [id])
+  unit          Unit              @relation(fields: [unitId], references: [id])
+  searchJourney SearchJourney     @relation(fields: [searchJourneyId], references: [id])
+  images        InspectionImage[]
+  aiResults     AIResult[]
+  repair        Repair?
+
+  @@index([visitId])
+  @@index([unitId])
+  @@index([searchJourneyId])
+  @@map("inspection_reports")
+}
+
+model InspectionImage {
+  id       String @id @default(uuid())
+  reportId String @map("report_id")
+  fileId   String @map("file_id")
+  order    Int
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  report InspectionReport @relation(fields: [reportId], references: [id])
+  file   File             @relation(fields: [fileId], references: [id])
+
+  @@index([reportId])
+  @@map("inspection_images")
+}
+
+// ---------------------------------------------------------------------------
+// Task 009: Technicians + Project Managers (no dedicated task number in
+// 15_Backend_Tasks.md - built here as a prerequisite for Repair assignment,
+// same rationale as Company/Files in earlier tasks). No registration flow is
+// documented for Project Manager anywhere in the 16 docs (unlike Technician,
+// which at least has Flow 11); provisioning a ProjectManager row is a manual
+// operation for now, same caveat already flagged for Company accounts.
+// ---------------------------------------------------------------------------
+
+model Technician {
+  id        String           @id @default(uuid())
+  projectId String           @map("project_id")
+  // TEC-001: exactly one project per technician - enforced by this being a
+  // plain FK (not a join table), plus userId unique (one Technician row per User).
+  userId    String           @unique @map("user_id")
+  status    TechnicianStatus @default(INVITED)
+
+  // Task 5 (decisions.md F2): RE5 wizard step 2 - one of 5 fixed UI tiles
+  // (كهرباء/سباكة/تكييف وتبريد/دهان/صيانة عامة), kept free-text since no
+  // canonical enum is defined anywhere in the docs. Nullable - technicians
+  // created before this task have none. Editable via profile edit.
+  specialty String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  project Project  @relation(fields: [projectId], references: [id])
+  user    User     @relation(fields: [userId], references: [id])
+  // Legacy pre-ownership pipeline (InspectionReport-side) - untouched by Task 8.
+  repairs Repair[]
+
+  // Task 8 (decisions.md I1/I8): canonical post-ownership work. Kept strictly
+  // separate from `repairs` above so pre-ownership and post-ownership
+  // statistics can never be silently summed (decisions.md I14).
+  assignedReports Report[]       @relation("ReportAssignedTechnician")
+  originalReports Report[]       @relation("ReportOriginalTechnician")
+  reportRepairs   ReportRepair[]
+  reportReviews   ReportReview[]
+  // Task 8 (I8): deterministic fair-selection tiebreaker - the last time
+  // automatic routing assigned a canonical report to this technician.
+  // Null for a technician that has never been routed to.
+  lastAssignedAt  DateTime?      @map("last_assigned_at")
+
+  @@index([projectId])
+  @@map("technicians")
+}
+
+model ProjectManager {
+  id        String               @id @default(uuid())
+  // PM-001/10_ERD.md "Project 1:1 Project Manager" - projectId unique.
+  // Task 4 (decisions.md E3): made nullable - an unassigned manager
+  // (status=ACTIVATED, projectId=null) is a real, addressable "eligible pool"
+  // state the RE2 wizard's manager picker (GET /api/managers) reads from.
+  // Postgres allows multiple NULLs under a unique constraint, so any number
+  // of unassigned managers can coexist.
+  projectId String?              @unique @map("project_id")
+  userId    String               @unique @map("user_id")
+  status    ProjectManagerStatus @default(INVITED)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  project Project? @relation(fields: [projectId], references: [id])
+  user    User     @relation(fields: [userId], references: [id])
+
+  @@map("project_managers")
+}
+
+// ---------------------------------------------------------------------------
+// Task 009: Repair Module
+// ---------------------------------------------------------------------------
+
+model Repair {
+  id           String       @id @default(uuid())
+  // REP-001/10_ERD.md "Report 1:1 Repair" - reportId unique.
+  reportId     String       @unique @map("report_id")
+  technicianId String       @map("technician_id")
+  status       RepairStatus @default(ASSIGNED)
+  startedAt    DateTime?    @map("started_at")
+  completedAt  DateTime?    @map("completed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  report     InspectionReport @relation(fields: [reportId], references: [id])
+  technician Technician       @relation(fields: [technicianId], references: [id])
+  images     RepairImage[]
+  aiResults  AIResult[]
+
+  @@index([technicianId])
+  @@map("repairs")
+}
+
+model RepairImage {
+  id       String          @id @default(uuid())
+  repairId String          @map("repair_id")
+  type     RepairImageType
+  fileId   String          @map("file_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  repair Repair @relation(fields: [repairId], references: [id])
+  file   File   @relation(fields: [fileId], references: [id])
+
+  @@index([repairId])
+  @@map("repair_images")
+}
+
+// ---------------------------------------------------------------------------
+// Task 008: AI Gateway - AI Results
+// (10_14 AI Analysis: "AI may execute multiple versions" per 10_ERD.md - 1:N
+// Report -> AI Results, not 1:1)
+// ---------------------------------------------------------------------------
+
+model AIResult {
+  id   String         @id @default(uuid())
+  type AIAnalysisType @default(INSPECTION)
+
+  inspectionReportId String? @map("inspection_report_id")
+  repairId           String? @map("repair_id")
+  warrantyReportId   String? @map("warranty_report_id")
+
+  // AI-007: request ID stored. AI-006: model version stored. AI-011: 0-100.
+  requestId        String              @map("request_id")
+  model            String
+  version          String
+  confidence       Int
+  prediction       String
+  priority         InspectionPriority?
+  suggestedRepair  String?             @map("suggested_repair")
+  processingTimeMs Int                 @map("processing_time_ms")
+  metadata         Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  inspectionReport InspectionReport? @relation(fields: [inspectionReportId], references: [id])
+  repair           Repair?           @relation(fields: [repairId], references: [id])
+  warrantyReport   WarrantyReport?   @relation(fields: [warrantyReportId], references: [id])
+
+  @@index([inspectionReportId])
+  @@index([repairId])
+  @@index([warrantyReportId])
+  @@map("ai_results")
+}
+
+// ---------------------------------------------------------------------------
+// Task 011: Ownership + Homeowner Activation
+// Built ahead of Task 010 (Warranty) despite the numbering: Task 010's own
+// listed dependency is "Ownership", which doesn't exist until this task
+// creates it. See Task 011 report for the reordering rationale.
+// ---------------------------------------------------------------------------
+
+model Ownership {
+  id     String @id @default(uuid())
+  unitId String @map("unit_id")
+  userId String @map("user_id")
+
+  // HOM-003: start date mandatory.
+  startDate DateTime        @default(now()) @map("start_date")
+  endDate   DateTime?       @map("end_date")
+  status    OwnershipStatus @default(ACTIVE)
+  // Task 5 (decisions.md F3): distinguishes "moved to a different unit"
+  // ('TRANSFERRED') from "the account itself was deactivated"
+  // ('DEACTIVATED') without re-deriving it from audit logs. Nullable -
+  // existing ENDED rows (if any) predate this column.
+  endReason String?         @map("end_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  unit    Unit     @relation(fields: [unitId], references: [id])
+  user    User     @relation(fields: [userId], references: [id])
+  reports Report[]
+
+  @@index([unitId])
+  @@index([userId])
+  @@map("ownerships")
+}
+
+model HomeownerActivation {
+  id     String @id @default(uuid())
+  unitId String @map("unit_id")
+  userId String @map("user_id")
+
+  // QR Code and Activation Code (Decision 014) are two delivery methods for
+  // the same secret, not two independently verifiable credentials - one
+  // opaque code serves both (typed manually, or encoded into a QR image by
+  // the frontend). Hashed at rest, same pattern as refresh/reset tokens.
+  codeHash    String                    @unique @map("code_hash")
+  status      HomeownerActivationStatus @default(PENDING)
+  expiresAt   DateTime                  @map("expires_at")
+  activatedAt DateTime?                 @map("activated_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  unit Unit @relation(fields: [unitId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([unitId])
+  @@index([userId])
+  @@map("homeowner_activations")
+}
+
+// ---------------------------------------------------------------------------
+// Task 010: Warranty Module
+// No endpoint/flow anywhere in the 16 docs creates a Warranty policy record
+// itself (WAR-008 "coverage determined by warranty policy" names no such
+// endpoint) - auto-created at Homeowner Activation (homeowner.service.ts),
+// the same trigger point as Ownership, with a default term/coverage. See
+// Task 010 report for the assumption this rests on.
+// ---------------------------------------------------------------------------
+
+model Warranty {
+  id     String @id @default(uuid())
+  unitId String @unique @map("unit_id") // Unit 1:1 Warranty per 10_ERD.md
+
+  startDate DateTime @default(now()) @map("start_date")
+  endDate   DateTime @map("end_date")
+  coverage  String
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  unit    Unit             @relation(fields: [unitId], references: [id])
+  reports WarrantyReport[]
+
+  @@map("warranties")
+}
+
+model WarrantyReport {
+  id          String @id @default(uuid())
+  warrantyId  String @map("warranty_id")
+  unitId      String @map("unit_id")
+  homeownerId String @map("homeowner_id")
+
+  // WAR-019: unique reference number.
+  referenceNumber String               @unique @map("reference_number")
+  status          WarrantyReportStatus @default(AI_ANALYSIS)
+  // Reuses InspectionPriority (same Low/Medium/High/Critical taxonomy;
+  // WAR docs never redefine a separate scale).
+  priority        InspectionPriority?
+  // WAR-013: category mandatory. No enum of valid categories is defined
+  // anywhere in the docs - kept as free text, not invented.
+  category        String
+  location        String
+  notes           String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  warranty        Warranty        @relation(fields: [warrantyId], references: [id])
+  unit            Unit            @relation(fields: [unitId], references: [id])
+  homeowner       User            @relation(fields: [homeownerId], references: [id])
+  images          WarrantyImage[]
+  aiResults       AIResult[]
+  // Task 8 (decisions.md I3): the canonical mirror created by the additive,
+  // idempotent backfill, if it has been run for this row. Relation only - no
+  // column and no data on this side changes, and nothing here ever writes to
+  // a WarrantyReport row.
+  canonicalReport Report?
+
+  @@index([warrantyId])
+  @@index([unitId])
+  @@index([homeownerId])
+  @@map("warranty_reports")
+}
+
+model WarrantyImage {
+  id       String @id @default(uuid())
+  reportId String @map("report_id")
+  fileId   String @map("file_id")
+  order    Int
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  report WarrantyReport @relation(fields: [reportId], references: [id])
+  file   File           @relation(fields: [fileId], references: [id])
+
+  @@index([reportId])
+  @@map("warranty_images")
+}
+
+// ---------------------------------------------------------------------------
+// Task 012: Notifications
+// Real Push/Email delivery isn't wired to any provider (no SendGrid/FCM/APNs
+// credentials configured) - notifications are created and immediately marked
+// SENT in-app; see notification.service.ts for the stub delivery boundary.
+// ---------------------------------------------------------------------------
+
+enum NotificationType {
+  PUSH
+  EMAIL
+  SMS
+}
+
+// 11_State_Machines.md #NOTIFICATION
+enum NotificationStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+}
+
+model Notification {
+  id     String             @id @default(uuid())
+  userId String             @map("user_id")
+  title  String
+  body   String
+  type   NotificationType   @default(PUSH)
+  status NotificationStatus @default(QUEUED)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+// ---------------------------------------------------------------------------
+// Sakani.sa Market Data (external reference/comparison data pulled from the
+// Sakani.sa public API via Parse.bot - NOT part of the ERD/16 docs. Kept
+// separate from Project/Building/Unit on purpose: those model YOUR OWN
+// companies' inventory with mandatory FKs to a verified Company, while this
+// is third-party market data with no company/building/floor concept of its
+// own. Keyed by Sakani's own numeric project/unit IDs (not a synthetic UUID)
+// so re-imports upsert cleanly instead of duplicating rows.
+// ---------------------------------------------------------------------------
+
+model SakaniProject {
+  id                  Int      @id // numeric portion of Sakani's project_id, e.g. "project_1458" -> 1458
+  externalId          String   @unique @map("external_id") // original string as returned by get_popular_projects, e.g. "project_1458"
+  projectCode         String?  @map("project_code")
+  name                String   @map("project_name")
+  projectType         String?  @map("project_type")
+  developerName       String?  @map("developer_name") // only present via get_popular_units' nested project object
+  city                String?
+  cityId              Int?     @map("city_id")
+  region              String?
+  regionId            Int?     @map("region_id")
+  lat                 Float?
+  lon                 Float?
+  minPrice            Float?   @map("min_price")
+  maxPrice            Float?   @map("max_price")
+  marketplacePrice    Float?   @map("marketplace_price")
+  availableUnitsCount Int?     @map("available_units_count")
+  unitTypes           String[] @map("unit_types")
+  raw                 Json // full raw API payload, for anything not modeled above
+  fetchedAt           DateTime @default(now()) @map("fetched_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  units SakaniUnit[]
+
+  @@map("sakani_projects")
+}
+
+model SakaniUnit {
+  id              Int      @id // Sakani's own unit_id
+  unitCode        String?  @map("unit_code")
+  unitType        String?  @map("unit_type")
+  unitSize        Float?   @map("unit_size")
+  livingArea      Float?   @map("living_area") // API returns this as a numeric string; parsed to Float on import
+  price           Float?
+  mohPrice        Float?   @map("moh_price")
+  bedroomCount    Int?     @map("bedroom_count")
+  bathroomCount   Int?     @map("bathroom_count")
+  floor           Int?
+  apartmentNumber String?  @map("apartment_number")
+  blockNumber     String?  @map("block_number")
+  buildingNumber  String?  @map("building_number")
+  status          String?
+  targetSegments  String[] @map("target_segments")
+  projectId       Int?     @map("project_id")
+  lat             Float?
+  lon             Float?
+  raw             Json
+  fetchedAt       DateTime @default(now()) @map("fetched_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project SakaniProject? @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+  @@map("sakani_units")
+}
+
+model SakaniPriceRange {
+  id             String   @id @default(uuid())
+  cityId         Int?     @map("city_id")
+  regionId       Int?     @map("region_id")
+  projectType    String?  @map("project_type")
+  maxPrice       Float?   @map("max_price")
+  maxRentalPrice Float?   @map("max_rental_price")
+  fetchedAt      DateTime @default(now()) @map("fetched_at")
+
+  @@map("sakani_price_ranges")
+}
+
+model SakaniSyncLog {
+  id          String   @id @default(uuid())
+  version     String
+  endpoint    String
+  recordCount Int      @map("record_count")
+  startedAt   DateTime @map("started_at")
+  finishedAt  DateTime @map("finished_at")
+
+  @@map("sakani_sync_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Audit Logs (AUD-005/AUD-010: immutable, append-only)
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?  @map("user_id")
+  action    String
+  entity    String
+  entityId  String?  @map("entity_id")
+  ipAddress String?  @map("ip_address")
+  metadata  Json?
+  timestamp DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Task 8 (docs/integration/decisions.md Part I): the canonical POST-OWNERSHIP
+// report domain — H8 (create) → H9 (track/approve/reopen) → C1/C2 (repair) →
+// C3 (history) → PM2 (monitor) → RE3/RE4/RE5 (references).
+//
+// This is B1's implemented resolution (decisions.md I0). It is deliberately a
+// *separate* domain from the pre-ownership `InspectionReport` + `Repair`
+// pipeline above, which is left completely untouched: no relation here points
+// at either of them, and `Repair` was NOT made polymorphic. Legacy
+// `WarrantyReport` rows are mirrored (never moved, never modified, never
+// deleted) by an additive, idempotent, opt-in backfill via
+// `Report.legacyWarrantyReportId` (decisions.md I3).
+// ---------------------------------------------------------------------------
+
+// H8's own nine category tiles (`catList` in `Sakn Report Journey.dc.html`:
+// سباكة/كهرباء/تشققات/دهانات/أبواب/نوافذ/أرضيات/أسقف/أخرى). Not the same
+// taxonomy as H10's six warranty categories — see decisions.md I4a for the
+// explicit, evidence-only mapping between them.
+enum ReportCategory {
+  PLUMBING
+  ELECTRICAL
+  CRACKS
+  PAINT
+  DOORS
+  WINDOWS
+  FLOORING
+  CEILINGS
+  OTHER
+}
+
+// H8/H9/C1/C2/C3/PM2 all render exactly three levels (منخفضة/متوسطة/عالية).
+// Deliberately NOT reusing `InspectionPriority`, which carries a fourth
+// (CRITICAL) that no post-ownership reference screen can display.
+enum ReportPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// decisions.md I6: whether the stored priority came from a validated AI
+// analysis or from the documented manual-entry default (MEDIUM). Surfaced in
+// the DTO so PM2 never presents a default as an AI verdict.
+enum ReportPrioritySource {
+  AI
+  MANUAL_DEFAULT
+}
+
+// decisions.md I2 — the one canonical status machine. Five states, no more:
+// ROUTING_PENDING → ROUTED → IN_PROGRESS → AWAITING_OWNER_APPROVAL → CLOSED,
+// plus AWAITING_OWNER_APPROVAL → IN_PROGRESS on a homeowner reopen. There is
+// no arbitrary status PATCH anywhere; each transition has its own endpoint.
+enum ReportStatus {
+  ROUTING_PENDING
+  ROUTED
+  IN_PROGRESS
+  AWAITING_OWNER_APPROVAL
+  CLOSED
+}
+
+// decisions.md I4: snapshotted once at creation and never recomputed.
+// NOT_EVALUATED_LEGACY exists solely for backfilled rows (I3) — the rules in
+// force when a legacy WarrantyReport was filed are unknowable, so no verdict
+// is retroactively invented for one.
+enum ReportWarrantyVerdict {
+  COVERED
+  NOT_COVERED
+  NOT_CONFIGURED
+  NO_WARRANTY
+  NOT_EVALUATED_LEGACY
+}
+
+enum ReportRoutingState {
+  PENDING
+  ROUTED
+}
+
+enum ReportMediaStage {
+  HOMEOWNER
+  BEFORE
+  AFTER
+}
+
+// decisions.md I2: only IN_PROGRESS counts as "active" for the
+// single-active-repair rule, which is enforced by the partial unique index
+// `report_repairs_active_technician_unique`. A homeowner reopen moves the row
+// to REOPENED (not IN_PROGRESS) so the homeowner's action can never be
+// blocked by, or silently violate, the technician's lock.
+enum ReportRepairStatus {
+  IN_PROGRESS
+  SUBMITTED
+  APPROVED
+  REOPENED
+}
+
+enum ReportActorType {
+  HOMEOWNER
+  TECHNICIAN
+  SYSTEM
+  AI
+}
+
+// decisions.md I5: append-only. Every label the H9/PM2/C3 reference timelines
+// render maps onto one of these; nothing is free text.
+enum ReportTimelineEventType {
+  REPORT_CREATED
+  AI_ANALYSIS_RECORDED
+  AI_ANALYSIS_UNAVAILABLE
+  WARRANTY_EVALUATED
+  ROUTING_PENDING_RECORDED
+  TECHNICIAN_ASSIGNED
+  ROUTING_RETRIED
+  REPAIR_STARTED
+  REPAIR_MEDIA_ADDED
+  REPAIR_SUBMITTED
+  HOMEOWNER_APPROVED
+  HOMEOWNER_REOPENED
+  REPORT_CLOSED
+  REVIEW_SUBMITTED
+  LEGACY_IMPORTED
+}
+
+enum ReportOrigin {
+  HOMEOWNER
+  LEGACY_WARRANTY_REPORT
+}
+
+model Report {
+  id String @id @default(uuid())
+
+  // decisions.md I1: rendered as "#1042" by every reference screen. Uniqueness
+  // is the Postgres sequence + this unique index, not application code; the
+  // migration restarts the sequence at 1001 purely so numbers are four digits
+  // like the reference mocks.
+  reportNumber Int @unique @default(autoincrement()) @map("report_number")
+
+  homeownerId String @map("homeowner_id")
+
+  // Immutable historical references, captured at creation (invariant 9): a
+  // later unit/homeowner/technician/project transfer affects FUTURE routing
+  // only and never repoints an existing report.
+  ownershipId String @map("ownership_id")
+  unitId      String @map("unit_id")
+  buildingId  String @map("building_id")
+  projectId   String @map("project_id")
+
+  // The category the report is actually filed under — the user-confirmed one
+  // (H8's "نعم، صحيح" or its correction), never the raw AI suggestion.
+  category                ReportCategory
+  categoryConfirmedByUser Boolean        @default(true) @map("category_confirmed_by_user")
+  problemText             String         @map("problem_text")
+  homeownerNote           String?        @map("homeowner_note")
+
+  // decisions.md I6: advisory record only. All null on the manual-entry path —
+  // never back-filled with a plausible-looking confidence.
+  analysisId          String?         @unique @map("analysis_id")
+  aiSuggestedCategory ReportCategory? @map("ai_suggested_category")
+  aiConfidence        Int?            @map("ai_confidence")
+  aiProblemText       String?         @map("ai_problem_text")
+  aiExplanation       String?         @map("ai_explanation")
+  aiProvider          String?         @map("ai_provider")
+  aiModel             String?         @map("ai_model")
+
+  priority       ReportPriority
+  prioritySource ReportPrioritySource @default(AI) @map("priority_source")
+
+  // decisions.md I4: written once inside the creation transaction, never
+  // updated by any later code path (asserted by test).
+  warrantyVerdict      ReportWarrantyVerdict @map("warranty_verdict")
+  warrantyReasonCode   String                @map("warranty_reason_code")
+  warrantyCategoryKey  String?               @map("warranty_category_key")
+  warrantyRulesVersion String                @map("warranty_rules_version")
+  warrantyEvaluatedAt  DateTime              @map("warranty_evaluated_at")
+  warrantyPeriodStart  DateTime?             @map("warranty_period_start")
+  warrantyPeriodEnd    DateTime?             @map("warranty_period_end")
+
+  status ReportStatus @default(ROUTING_PENDING)
+
+  // decisions.md I8/I9
+  routingState         ReportRoutingState @default(PENDING) @map("routing_state")
+  routingReasonCode    String?            @map("routing_reason_code")
+  routingAttemptCount  Int                @default(0) @map("routing_attempt_count")
+  lastRoutingAttemptAt DateTime?          @map("last_routing_attempt_at")
+
+  assignedTechnicianId String?   @map("assigned_technician_id")
+  // Written once at first assignment and never updated — the historical
+  // record of who the system originally routed this report to.
+  originalTechnicianId String?   @map("original_technician_id")
+  assignedAt           DateTime? @map("assigned_at")
+
+  // decisions.md I10: null whenever the priority has no configured SLA target
+  // (MEDIUM/LOW today) — an honest "not configured", never a guessed deadline.
+  slaStartDueAt   DateTime? @map("sla_start_due_at")
+  slaRulesVersion String    @map("sla_rules_version")
+
+  reopenCount Int @default(0) @map("reopen_count")
+
+  origin                 ReportOrigin @default(HOMEOWNER)
+  // decisions.md I3: idempotency key for the legacy backfill. Null for every
+  // report a homeowner actually filed through H8.
+  legacyWarrantyReportId String?      @unique @map("legacy_warranty_report_id")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  closedAt  DateTime? @map("closed_at")
+
+  homeowner            User            @relation(fields: [homeownerId], references: [id])
+  ownership            Ownership       @relation(fields: [ownershipId], references: [id])
+  unit                 Unit            @relation(fields: [unitId], references: [id])
+  building             Building        @relation(fields: [buildingId], references: [id])
+  project              Project         @relation(fields: [projectId], references: [id])
+  assignedTechnician   Technician?     @relation("ReportAssignedTechnician", fields: [assignedTechnicianId], references: [id])
+  originalTechnician   Technician?     @relation("ReportOriginalTechnician", fields: [originalTechnicianId], references: [id])
+  analysis             ReportAnalysis? @relation(fields: [analysisId], references: [id])
+  legacyWarrantyReport WarrantyReport? @relation(fields: [legacyWarrantyReportId], references: [id])
+
+  media    ReportMedia[]
+  repair   ReportRepair?
+  timeline ReportTimelineEvent[]
+  review   ReportReview?
+
+  @@index([homeownerId, createdAt])
+  @@index([projectId, status])
+  @@index([unitId])
+  @@index([buildingId])
+  @@index([assignedTechnicianId, status])
+  @@index([status])
+  @@index([ownershipId])
+  @@map("reports")
+}
+
+// DB-007 (images never stored in the database): durable storage key + public
+// URL only, never bytes and never base64. decisions.md I11.
+model ReportMedia {
+  id           String           @id @default(uuid())
+  reportId     String           @map("report_id")
+  stage        ReportMediaStage
+  // Server-derived object key ("reports/{reportId}/{stage}/{uuid}.{ext}") —
+  // no client-supplied string ever reaches a storage path.
+  storageKey   String           @map("storage_key")
+  url          String
+  mimeType     String           @map("mime_type")
+  sizeBytes    Int              @map("size_bytes")
+  sortOrder    Int              @default(0) @map("sort_order")
+  uploadedById String?          @map("uploaded_by_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  report     Report @relation(fields: [reportId], references: [id])
+  uploadedBy User?  @relation(fields: [uploadedById], references: [id])
+
+  @@index([reportId, stage, sortOrder])
+  @@map("report_media")
+}
+
+// decisions.md I0 (#6): the dedicated post-ownership repair model. Legacy
+// `Repair` is untouched and still points only at `InspectionReport`.
+model ReportRepair {
+  id           String             @id @default(uuid())
+  reportId     String             @unique @map("report_id")
+  technicianId String             @map("technician_id")
+  status       ReportRepairStatus @default(IN_PROGRESS)
+
+  startedAt           DateTime  @map("started_at")
+  submittedAt         DateTime? @map("submitted_at")
+  homeownerDecisionAt DateTime? @map("homeowner_decision_at")
+
+  technicianNote        String? @map("technician_note")
+  homeownerReopenReason String? @map("homeowner_reopen_reason")
+
+  // Wall-clock minutes from first start to homeowner approval — C3's "المدة"
+  // column and RE5's average-duration statistic both read this, never a
+  // client-supplied number.
+  durationMinutes Int? @map("duration_minutes")
+  reopenCount     Int  @default(0) @map("reopen_count")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  report     Report        @relation(fields: [reportId], references: [id])
+  technician Technician    @relation(fields: [technicianId], references: [id])
+  review     ReportReview?
+
+  @@index([technicianId, status])
+  @@map("report_repairs")
+}
+
+// decisions.md I5: APPEND-ONLY. The repository exposes create/list and no
+// update or delete; no service code path mutates a row. A report and its
+// timeline are never deleted (A7).
+model ReportTimelineEvent {
+  id        String                  @id @default(uuid())
+  reportId  String                  @map("report_id")
+  type      ReportTimelineEventType
+  actorType ReportActorType
+  actorId   String?                 @map("actor_id")
+  // Small, service-built, structured JSON only — never a raw request body,
+  // never a secret, never an image payload (counts and storage keys at most).
+  metadata  Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  report Report @relation(fields: [reportId], references: [id])
+  actor  User?  @relation(fields: [actorId], references: [id])
+
+  // `id` is part of the ordering index so two events written inside the same
+  // transaction (identical createdAt) still order deterministically.
+  @@index([reportId, createdAt, id])
+  @@map("report_timeline_events")
+}
+
+// decisions.md I13: one review per closed report, enforced at the database
+// level by reportId @unique. Deliberately NOT `VisitFeedback` reused — a
+// visit rating and a repair rating are different things and must never feed
+// each other's averages (G11 holds in both directions).
+model ReportReview {
+  id             String @id @default(uuid())
+  reportId       String @unique @map("report_id")
+  reportRepairId String @unique @map("report_repair_id")
+  technicianId   String @map("technician_id")
+  homeownerId    String @map("homeowner_id")
+
+  rating  Int
+  comment String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  report       Report       @relation(fields: [reportId], references: [id])
+  reportRepair ReportRepair @relation(fields: [reportRepairId], references: [id])
+  technician   Technician   @relation(fields: [technicianId], references: [id])
+  homeowner    User         @relation(fields: [homeownerId], references: [id])
+
+  @@index([technicianId, createdAt])
+  @@map("report_reviews")
+}
+
+// decisions.md I6: the server-side record of one POST /api/reports/analyze
+// result. POST /api/reports takes an opaque `analysisId`, never the AI fields
+// themselves — that is the mechanism (not just a comment) behind "AI advises,
+// it never decides". Rows are per-user, single-use, and carry the exact media
+// keys they were computed from.
+model ReportAnalysis {
+  id     String @id @default(uuid())
+  userId String @map("user_id")
+
+  provider String
+  model    String
+
+  suggestedCategory ReportCategory @map("suggested_category")
+  problemText       String         @map("problem_text")
+  priority          ReportPriority
+  confidence        Int
+  explanation       String
+
+  // Storage keys the analysis was computed from; POST /api/reports refuses an
+  // analysis whose keys do not exactly match the media being submitted.
+  mediaKeys String[] @map("media_keys")
+
+  // Validated object-detection output when an ObjectDetectionProvider is
+  // actually configured. Null in this environment — YOLO is not configured
+  // and nothing claims otherwise (decisions.md I7).
+  detections Json?
+
+  consumedByReportId String?  @unique @map("consumed_by_report_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  user   User    @relation(fields: [userId], references: [id])
+  report Report?
+
+  @@index([userId, createdAt])
+  @@map("report_analyses")
+}
