@@ -25,3 +25,5 @@ logs/
 sukun-backend/storage/*
 !sukun-backend/storage/.gitkeep
 
+.vercel
+.env*
