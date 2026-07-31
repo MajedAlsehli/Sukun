@@ -552,7 +552,7 @@ function HomeownersManagementInner() {
 
             <div style={{ position: "relative", marginBottom: "13px" }}>
               <span style={{ position: "absolute", top: "50%", insetInlineStart: "14px", transform: "translateY(-50%)" }}><SearchIcon /></span>
-              <input style={searchStyle} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ابحث بالاسم أو الجوال أو البريد أو المشروع أو المبنى أو رقم الوحدة" autoComplete="off" />
+              <input data-sk-search-field style={searchStyle} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ابحث بالاسم أو الجوال أو البريد أو المشروع أو المبنى أو رقم الوحدة" autoComplete="off" />
             </div>
 
             <div data-sk-scroll-row style={{ display: "flex", gap: "8px", marginBottom: "16px", overflowX: "auto", paddingBottom: "2px" }}>

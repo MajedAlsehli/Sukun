@@ -702,7 +702,7 @@ function ProjectWorkspaceInner() {
           <div>
             <div style={{ position: "relative", marginBottom: "13px" }}>
               <span style={{ position: "absolute", top: "50%", insetInlineStart: "14px", transform: "translateY(-50%)" }}><SearchIcon /></span>
-              <input style={searchStyle} value={unitQuery} onChange={(e) => setUnitQuery(e.target.value)} placeholder="ابحث برقم الوحدة" autoComplete="off" />
+              <input data-sk-search-field style={searchStyle} value={unitQuery} onChange={(e) => setUnitQuery(e.target.value)} placeholder="ابحث برقم الوحدة" autoComplete="off" />
             </div>
             <div data-sk-scroll-row style={{ display: "flex", gap: "8px", marginBottom: "12px", overflowX: "auto", paddingBottom: "2px" }}>
               {["الكل", "مشغولة", "شاغرة", "محجوزة"].map((f) => (
@@ -799,7 +799,7 @@ function ProjectWorkspaceInner() {
             </div>
             <div style={{ position: "relative", marginBottom: "13px" }}>
               <span style={{ position: "absolute", top: "50%", insetInlineStart: "14px", transform: "translateY(-50%)" }}><SearchIcon /></span>
-              <input style={searchStyle} value={reportQuery} onChange={(e) => setReportQuery(e.target.value)} placeholder="ابحث برقم البلاغ أو الوحدة أو اسم الساكن" autoComplete="off" />
+              <input data-sk-search-field style={searchStyle} value={reportQuery} onChange={(e) => setReportQuery(e.target.value)} placeholder="ابحث برقم البلاغ أو الوحدة أو اسم الساكن" autoComplete="off" />
             </div>
             <div data-sk-scroll-row style={{ display: "flex", gap: "8px", marginBottom: "12px", overflowX: "auto", paddingBottom: "2px" }}>
               {["الكل", "مفتوح", "قيد التنفيذ", "بانتظار اعتماد الساكن", "مغلق"].map((f) => (

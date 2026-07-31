@@ -799,10 +799,15 @@ body[data-sk-cta-bar-present] [data-sk-mobile-fit] {
     overflow-x: auto;
     max-width: 100%;
   }
-  /* A cell authored with a fixed pixel min-width cannot fit a phone. */
+  /* A cell authored with a fixed pixel min-width cannot fit a phone. The
+     values this is aimed at are the 160-480px column floors; matching on the
+     leading digit also caught `min-width: 44px`, which is the opposite kind of
+     value — the iOS tap-target floor that `AccountMenu` and the company drawer
+     set deliberately. Zeroing it collapsed those buttons to their icon's width
+     (19px measured), so 44 is excluded rather than the rule being loosened. */
   [data-sk-mobile-fit] [style*="min-width: 2"],
   [data-sk-mobile-fit] [style*="min-width: 3"],
-  [data-sk-mobile-fit] [style*="min-width: 4"] {
+  [data-sk-mobile-fit] [style*="min-width: 4"]:not([style*="min-width: 44px"]) {
     min-width: 0 !important;
   }
   /* Long unbroken tokens (an email, a code) must wrap rather than widen the
@@ -848,5 +853,118 @@ body[data-sk-cta-bar-present] [data-sk-mobile-fit] {
     bottom: calc(var(--sk-bottom-nav-h) + var(--sk-stack-gap)) !important;
     max-height: 45dvh;
     overflow-y: auto;
+  }
+}
+
+/* --- 7. Touch targets -----------------------------------------------------
+   Every control in this app is authored at a mouse-sized height: the filter
+   chips, the card actions and the wizard buttons all land at 37-40px, and the
+   landing footer's link columns at 20-21px. A finger's contact patch is wider
+   than that, which is why "تعطيل الحساب" and "تعديل البيانات" — 8px apart in a
+   card's action row — are a realistic mis-tap, and why the footer's twelve
+   stacked links are effectively one 21px-tall ribbon each.
+
+   44px is the iOS Human Interface minimum and the same constant
+   `AccountMenu`/`ConfirmDialog` already set inline on the controls they own;
+   this generalizes it rather than introducing a new number. It is a MINIMUM:
+   a control already at or above 44px is untouched, so nothing is resized
+   downward and no button changes its font, colour, radius or padding.
+
+   `align-content` (not a display change) is what centres the label inside the
+   taller box. Most controls here are `display: flex` and centre themselves;
+   the rest are inline-block, where `align-content: center` centres the line
+   box without altering the box type — changing them to flex would re-lay-out
+   the ones whose content is a block (a whole card rendered as a button).
+
+   Mobile only: the desktop rendering never sees any of it. */
+@media (max-width: 767px) {
+  button,
+  select,
+  [role="button"],
+  a[href],
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]) {
+    min-height: 44px;
+    align-content: center;
+  }
+  /* Inline links inside running copy are excluded: `min-height` does not apply
+     to a non-replaced inline box, so a link in a paragraph is unaffected by the
+     rule above — only links laid out as a block/flex item (nav rows, footer
+     columns, card links) grow, which is exactly the set that needed to. */
+}
+
+/* --- 7b. Uneven two-column splits ----------------------------------------
+   These are the "content beside content" splits the desktop screens are built
+   from — a text panel next to a photo (`/home`), next to a decorative wash
+   (`/warranty`), next to a sidebar card (`/discovery`'s recommendation,
+   `/company/projects/[id]`'s settings). Every one of them is authored as a
+   fractional pair, so at a phone width both sides shrink together instead of
+   one of them stacking: at 390px `/home`'s hero panel is 160px wide, which is
+   where its "الضمان ساري" chip stops fitting and spills across the photograph,
+   and at 320px the same panel breaks "ريزيدنس" across two lines.
+
+   Collapsing the pair is the whole correction. Nothing is hidden, reordered or
+   restyled — the same two children render, one under the other, each at the
+   full width it was already asking for. Three of these templates were already
+   collapsed under `[data-sk-mobile-fit]` at 560px; this states the rest of the
+   set once, at the same `md` breakpoint every other correction above uses.
+
+   The templates are listed literally rather than matched by a pattern: each
+   string appears exactly once in the codebase, so the rule cannot reach a grid
+   nobody checked. */
+@media (max-width: 767px) {
+  /* homeowners + technicians management */
+  [style*="grid-template-columns: 1.05fr .95fr"],
+  /* my home hero */
+  [style*="grid-template-columns: 1.15fr 1fr"],
+  /* project workspace settings */
+  [style*="grid-template-columns: 1.15fr .85fr"],
+  /* warranty centre hero */
+  [style*="grid-template-columns: 1.3fr 1fr"],
+  /* project details — three of its own splits */
+  [style*="grid-template-columns: 1.35fr 1fr"],
+  [style*="grid-template-columns: 1.5fr 1fr"],
+  [style*="grid-template-columns: 1fr 1.3fr"],
+  /* discovery recommendation (excluding the landing footer's 4-across, which
+     starts with the same two tracks and has its own breakpoint already) */
+  [style*="grid-template-columns: 1.6fr 1fr"]:not([style*="1fr 1fr 1fr"]) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* A pair of EQUAL columns is a different case: two form fields side by side
+   still read fine at 375px and above (~145px each, which fits every field in
+   this app), and stacking them there would lengthen forms nobody complained
+   about. At 320px the same pair is 108px per field, which is not usable — so
+   this one collapses only at the narrowest sizes. */
+@media (max-width: 360px) {
+  [style*="grid-template-columns: 1fr 1fr"]:not([style*="1fr 1fr 1fr"]) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  /* These form grids hold full-width rows as `grid-column: span 2` children.
+     A child spanning two tracks in a one-track grid makes the grid CREATE the
+     second track implicitly, so the column count above comes straight back —
+     the collapse silently did nothing until this was added. With one column,
+     "span 2" has nothing left to mean. */
+  [style*="grid-template-columns: 1fr 1fr"]:not([style*="1fr 1fr 1fr"]) > [style*="grid-column"] {
+    grid-column: auto !important;
+  }
+}
+
+/* --- 8. The company search field's icon and its own placeholder ----------
+   The four RE search inputs pair an icon at `inset-inline-start: 14px` with
+   `padding: 12px 14px 12px 42px` — a PHYSICAL left padding. In this app's RTL
+   direction the icon sits at the right edge while the 42px of reserved space
+   sits at the left, so the placeholder starts underneath the magnifier. On a
+   desktop-width field the placeholder is far shorter than the input and the
+   collision is invisible; at 320-430px the field is barely wider than the text,
+   and the first word renders on top of the icon.
+
+   Swapping the reservation to the logical side is the whole fix. Scoped to
+   mobile so the (unaffected, approved) desktop field keeps its exact metrics.
+   The fields opt in with `data-sk-search-field`; nothing else about them
+   changes, in either direction. */
+@media (max-width: 767px) {
+  [data-sk-search-field] {
+    padding-inline: 42px 14px !important;
   }
 }

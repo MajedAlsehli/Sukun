@@ -67,6 +67,68 @@ describe("globals.css mobile corrections", () => {
     }
   });
 
+  it("raises tap targets to 44px, and only below the md breakpoint", () => {
+    const i = css.indexOf("min-height: 44px");
+    expect(i).toBeGreaterThan(-1);
+    expect(blockAt(i)).toMatch(/max-width:\s*767px/);
+  });
+
+  it("centres a taller control's label without changing its box type", () => {
+    // `display: flex` on a button whose content is a block (a whole card
+    // rendered as a button) would re-lay-out it; `align-content` does not.
+    const i = css.indexOf("min-height: 44px");
+    const rule = css.slice(i, css.indexOf("}", i));
+    expect(rule).toContain("align-content: center");
+    expect(rule).not.toMatch(/display:\s*(inline-)?flex/);
+  });
+
+  it("keeps the 44px tap-target floor out of the min-width zeroing rule", () => {
+    // `[style*="min-width: 4"]` matched `min-width: 44px` and collapsed the
+    // account/drawer buttons to their icon's width.
+    const i = css.indexOf('[style*="min-width: 4"]');
+    expect(i).toBeGreaterThan(-1);
+    expect(css.slice(i, css.indexOf("{", i))).toContain(':not([style*="min-width: 44px"])');
+  });
+
+  it("collapses each uneven two-column split, inside the md breakpoint", () => {
+    // Listed literally, not pattern-matched: each template string occurs once
+    // in the codebase, so the rule cannot reach a grid nobody looked at.
+    for (const template of [
+      "1.05fr .95fr",
+      "1.15fr 1fr",
+      "1.15fr .85fr",
+      "1.3fr 1fr",
+      "1.35fr 1fr",
+      "1.5fr 1fr",
+      "1fr 1.3fr",
+      "1.6fr 1fr",
+    ]) {
+      // `lastIndexOf`: three of these also appear in the older, narrower
+      // `data-sk-mobile-fit`-scoped block at 560px, which this supersedes.
+      const i = css.lastIndexOf(`[style*="grid-template-columns: ${template}"]`);
+      expect(i, `${template} must be collapsed`).toBeGreaterThan(-1);
+      expect(blockAt(i), `${template} must be inside a max-width query`).toMatch(/max-width:\s*767px/);
+    }
+  });
+
+  it("collapses an EQUAL pair only at the narrowest widths", () => {
+    // Two fields side by side still read at 375px; stacking them there would
+    // lengthen forms that were never reported.
+    const i = css.indexOf('[style*="grid-template-columns: 1fr 1fr"]');
+    expect(i).toBeGreaterThan(-1);
+    expect(blockAt(i)).toMatch(/max-width:\s*360px/);
+    // A `grid-column: span 2` child would re-create the second track implicitly.
+    expect(css.slice(i)).toContain("grid-column: auto !important");
+  });
+
+  it("re-reserves the company search field's icon space on the logical side", () => {
+    const i = css.indexOf("[data-sk-search-field]");
+    expect(i).toBeGreaterThan(-1);
+    expect(blockAt(i)).toMatch(/max-width:\s*767px/);
+    // The inline `padding` shorthand outranks any rule without `!important`.
+    expect(css.slice(i, css.indexOf("}", i))).toMatch(/padding-inline:\s*42px 14px\s*!important/);
+  });
+
   it("still confines the pre-existing grid corrections to data-sk-mobile-fit subtrees", () => {
     // These were scoped deliberately after an unscoped version changed fifteen
     // other screens; re-widening them would be a silent visual regression.

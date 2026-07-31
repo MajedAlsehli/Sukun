@@ -212,7 +212,12 @@ function MyHomeInner() {
         </div>
 
         <div style={{ marginTop: "30px" }}>
-          <div style={{ position: "relative", display: "flex", alignItems: "center", gap: "20px", background: "var(--n-surface2)", border: "1px solid var(--n-border)", borderRadius: "var(--r-xl)", padding: "24px 26px", overflow: "hidden" }}>
+          {/* [icon | copy | action] — the icon and the button are both
+              `flex: none`, so on a phone the copy column is squeezed to ~140px
+              and every word lands on its own line. `data-sk-stack-row` moves
+              the action to its own line below at mobile width only (globals.css
+              §5b); the desktop row is unchanged. */}
+          <div data-sk-stack-row style={{ position: "relative", display: "flex", alignItems: "center", gap: "20px", background: "var(--n-surface2)", border: "1px solid var(--n-border)", borderRadius: "var(--r-xl)", padding: "24px 26px", overflow: "hidden" }}>
             <span style={{ width: "56px", height: "56px", borderRadius: "var(--r-lg)", background: "var(--n-surface)", border: "1px solid var(--n-border)", color: "var(--g-600)", display: "flex", alignItems: "center", justifyContent: "center", flex: "none", boxShadow: "var(--sh-1)" }}><SearchIcon /></span>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: "16.5px", fontWeight: 700 }}>ابحث عن منزل جديد</div>

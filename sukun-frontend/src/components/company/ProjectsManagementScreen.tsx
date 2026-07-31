@@ -505,6 +505,7 @@ function ProjectsManagementInner({ startInWizard }: { startInWizard: boolean }) 
                 <SearchIcon />
               </span>
               <input
+                data-sk-search-field
                 style={{ width: "100%", fontSize: "14px", padding: "12px 14px 12px 42px", border: "1.5px solid var(--n-border-strong)", borderRadius: "var(--r-md)", background: "var(--n-surface)", color: "var(--t-primary)", outline: "none" }}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -831,6 +832,7 @@ function ProjectsManagementInner({ startInWizard }: { startInWizard: boolean }) 
                       <SearchIcon />
                     </span>
                     <input
+                      data-sk-search-field
                       style={{ width: "100%", fontSize: "14px", padding: "12px 14px 12px 42px", border: "1.5px solid var(--n-border-strong)", borderRadius: "var(--r-md)", background: "var(--n-surface)", color: "var(--t-primary)", outline: "none" }}
                       value={pickQuery}
                       onChange={(e) => setPickQuery(e.target.value)}
