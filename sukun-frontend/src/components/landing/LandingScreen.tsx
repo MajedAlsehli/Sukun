@@ -430,6 +430,7 @@ export function LandingScreen() {
         }}
       >
         <div
+          data-sk-landing-bar
           style={{
             maxWidth: 1240,
             margin: "0 auto",
@@ -492,7 +493,14 @@ export function LandingScreen() {
               </Icon>
               {lang}
             </button>
-            <a href="/signup" style={{ fontSize: 14.5, fontWeight: 600, padding: "10px 20px", borderRadius: "var(--r-md)", background: "var(--g-900)", color: "var(--t-on-dark)", boxShadow: "var(--sh-1)" }}>
+            {/* DESKTOP ONLY. On a phone this sat between the language pill
+                and the burger, giving the bar four controls edge-to-edge —
+                and it is the SAME "ابدأ رحلتك" the hero renders as its primary
+                button a few hundred pixels below, and the same one the mobile
+                drawer already lists. Nothing is lost: the action keeps two
+                entry points on mobile, and the header gets the room the brief
+                asks for (logo · language · menu). */}
+            <a className="sk-only-desktop" href="/signup" style={{ fontSize: 14.5, fontWeight: 600, padding: "10px 20px", borderRadius: "var(--r-md)", background: "var(--g-900)", color: "var(--t-on-dark)", boxShadow: "var(--sh-1)" }}>
               ابدأ رحلتك
             </a>
             <button
@@ -584,7 +592,7 @@ export function LandingScreen() {
             to 0 regardless of viewport width; object-position keeps the
             house anchored left as the box crops its own already-faded
             right tail. */}
-        <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: "48%", minWidth: 480, zIndex: 0 }}>
+        <div data-sk-hero-media style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: "48%", minWidth: 480, zIndex: 0 }}>
           <img
             src="/hero-architecture.png"
             alt=""
@@ -595,6 +603,7 @@ export function LandingScreen() {
           />
         </div>
         <div
+          data-sk-hero-veil
           style={{
             position: "absolute",
             inset: 0,
@@ -607,6 +616,7 @@ export function LandingScreen() {
           }}
         />
         <div
+          data-sk-hero-glow
           style={{
             position: "absolute",
             top: "14%",
@@ -621,7 +631,7 @@ export function LandingScreen() {
             pointerEvents: "none",
           }}
         />
-        <div style={{ position: "relative", zIndex: 2, maxWidth: 1240, margin: "0 auto", padding: "120px 40px 60px", width: "100%" }}>
+        <div data-sk-hero-copy style={{ position: "relative", zIndex: 2, maxWidth: 1240, margin: "0 auto", padding: "120px 40px 60px", width: "100%" }}>
           <div style={{ maxWidth: 620, marginRight: 0, marginLeft: "auto" }}>
             <h1 style={{ fontSize: 74, fontWeight: 700, lineHeight: 1.32, letterSpacing: 0, margin: 0 }}>
               سّكن…
@@ -643,6 +653,7 @@ export function LandingScreen() {
           </div>
         </div>
         <div
+          data-sk-hero-scroll
           style={{
             position: "absolute",
             bottom: 26,

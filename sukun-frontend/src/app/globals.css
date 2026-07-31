@@ -980,6 +980,152 @@ body[data-sk-cta-bar-present] [data-sk-mobile-fit] {
   }
 }
 
+/* --- 7d. The landing hero, recomposed for a phone ------------------------
+
+   The hero is authored as a SIDE-BY-SIDE composition: a photograph pinned to
+   the left half of the section, a left-to-right warm veil over it, and the
+   copy sitting in the right half on the faded end of that veil. It is a good
+   desktop composition and it is untouched at `md` and above.
+
+   Below `md` there is no "half" to sit beside. The photo becomes a full-bleed
+   backdrop and the copy lands on top of it, which is what made the mobile page
+   read as accidental:
+
+     * the veil's fade runs left-to-right across a full-width image, so under
+       the paragraph — the darkest part of the photo, the palm and the building
+       — there is almost no contrast left and the sentence is barely readable;
+     * the photograph has its own floating feature icons BAKED INTO the asset
+       (a magnifier, a document badge — they are not DOM elements and cannot be
+       moved individually), and at 390px they land directly behind the headline
+       and beside the paragraph;
+     * the decorative glow is positioned for the desktop left column, which on
+       a phone puts it right behind the headline;
+     * `min-height: 100dvh` with `align-items: center` leaves a large empty
+       band under the button, and the scroll cue is pinned over the road.
+
+   The fix reorders rather than redesigns. The section becomes a single column
+   in the reading order the brief asks for — title, paragraph, button, then the
+   image — using `order` on the SAME five children. Nothing is added, nothing is
+   removed, the photograph is the same file, and every colour, font and radius
+   is the one the section already used.
+
+   One spacing scale is used throughout, so nothing is placed by eye:
+   20px inline gutter (16px under 360px), and 20 / 28 / 40 vertically. */
+@media (max-width: 767px) {
+  /* The bar keeps its logo, its language pill and its menu. What changes is
+     that its 40px desktop gutter becomes the SAME 20px gutter the hero copy
+     uses, so the logo's edge and the headline's edge sit on one line instead
+     of 20px apart, and its padding stops animating between 18px and 12px on
+     scroll — a height that moves under a fixed header reads as drift on a
+     phone, where the header is most of what you can see. */
+  .sk-root [data-sk-landing-bar] {
+    padding: 12px 20px !important;
+  }
+
+  .sk-root .sk-hero {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    /* The photo is a band now, not a backdrop, so the section no longer has to
+       fill the viewport to make its point. */
+    min-height: 0;
+  }
+
+  /* 1 · copy — title, paragraph, button, in that order and first on screen. */
+  .sk-root [data-sk-hero-copy] {
+    order: 1;
+    /* Clears the fixed header (46px logo + 18px padding either side). */
+    padding: 96px 20px 40px !important;
+  }
+  .sk-root [data-sk-hero-copy] h1 {
+    /* The h1 already has a mobile clamp above; this only opens the space
+       around it that the brief asks for. */
+    margin: 0 0 20px !important;
+  }
+  .sk-root [data-sk-hero-copy] p {
+    margin: 0 0 28px !important;
+    font-size: 16px !important;
+    line-height: 1.75 !important;
+  }
+  .sk-root [data-sk-hero-copy] h1 + p {
+    margin-top: 0 !important;
+  }
+  .sk-root [data-sk-hero-copy] > div > div:last-child {
+    margin-top: 0 !important;
+  }
+
+  /* 2 · the photograph, below the button — in flow, not behind the words.
+
+     The crop is chosen, not defaulted. `cover` at 390x354 discards 99px of a
+     489px-wide scaled image, and centring it sliced the asset's document badge
+     exactly in half against the left edge — the single most "accidental"-
+     looking thing left on the page. 72% shifts the crop so all four remaining
+     badges (search, calendar, camera, shield) sit whole and arc around the
+     house, while 46% keeps the arch and door in frame and drops the road at
+     the foot of the asset. Same image file, same asset, different window. */
+  .sk-root [data-sk-hero-media] {
+    order: 2;
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 42vh;
+    min-height: 260px;
+    max-height: 360px;
+  }
+  .sk-root [data-sk-hero-media] img {
+    object-position: 72% 46% !important;
+  }
+  /* The same warm token the veil uses, so the band melts into the page
+     instead of butting against the copy with a hard horizontal edge. */
+  .sk-root [data-sk-hero-media]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(to bottom, var(--n-bg) 0%, rgba(246, 239, 232, 0) 30%);
+  }
+
+  /* 3 · the desktop veil is a left-to-right fade for a left-half image. With
+     the image in flow underneath the copy it has nothing left to fade, and
+     spread over the whole section it only greys the page. */
+  .sk-root [data-sk-hero-veil] {
+    display: none !important;
+  }
+
+  /* 4 · the glow frames the image instead of sitting behind the headline. */
+  .sk-root [data-sk-hero-glow] {
+    top: auto !important;
+    bottom: 0 !important;
+    left: 50% !important;
+    transform: translateX(-50%);
+    width: 260px !important;
+    height: 260px !important;
+    z-index: 0 !important;
+  }
+
+  /* 5 · the scroll cue joins the flow rather than floating over the photo. */
+  .sk-root [data-sk-hero-scroll] {
+    order: 3;
+    position: relative !important;
+    inset: auto !important;
+    transform: none !important;
+    padding: 20px 0 28px;
+  }
+}
+
+/* At 320px a 20px gutter leaves the headline too little room, so the scale
+   steps down to 16 — and the bar steps down with it, or the logo would sit
+   4px inboard of the headline it is supposed to line up with. */
+@media (max-width: 360px) {
+  .sk-root [data-sk-hero-copy] {
+    padding-inline: 16px !important;
+  }
+  .sk-root [data-sk-landing-bar] {
+    padding-inline: 16px !important;
+  }
+}
+
 /* --- 8. The company search field's icon and its own placeholder ----------
    The four RE search inputs pair an icon at `inset-inline-start: 14px` with
    `padding: 12px 14px 12px 42px` — a PHYSICAL left padding. In this app's RTL

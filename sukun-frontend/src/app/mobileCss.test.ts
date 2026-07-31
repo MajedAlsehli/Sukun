@@ -121,6 +121,41 @@ describe("globals.css mobile corrections", () => {
     expect(css.slice(i)).toContain("grid-column: auto !important");
   });
 
+  it("recomposes the landing hero only below the md breakpoint", () => {
+    for (const marker of [
+      "[data-sk-hero-copy]",
+      "[data-sk-hero-media]",
+      "[data-sk-hero-veil]",
+      "[data-sk-hero-glow]",
+      "[data-sk-hero-scroll]",
+      "[data-sk-landing-bar]",
+    ]) {
+      const i = css.indexOf(marker);
+      expect(i, `${marker} must be styled`).toBeGreaterThan(-1);
+      expect(blockAt(i), `${marker} must be inside a max-width query`).toMatch(/max-width/);
+    }
+  });
+
+  it("orders the hero title -> paragraph -> CTA -> image, never the reverse", () => {
+    // The copy must come before the photograph. If these two ever swap, the
+    // page is back to the composition that put the paragraph on top of a
+    // palm tree.
+    const copy = css.slice(css.indexOf("[data-sk-hero-copy] {"));
+    const media = css.slice(css.indexOf("[data-sk-hero-media] {"));
+    expect(copy.slice(0, copy.indexOf("}"))).toMatch(/order:\s*1/);
+    expect(media.slice(0, media.indexOf("}"))).toMatch(/order:\s*2/);
+  });
+
+  it("keeps one gutter for the bar and the hero copy at each step", () => {
+    // The logo lining up with the headline is the whole point; two different
+    // values would put them 4px apart, which is exactly what "accidental"
+    // looks like.
+    const at360 = css.slice(css.lastIndexOf("@media (max-width: 360px)"));
+    expect(at360).toContain("[data-sk-hero-copy]");
+    expect(at360).toContain("[data-sk-landing-bar]");
+    expect((at360.match(/padding-inline:\s*16px/g) ?? []).length).toBe(2);
+  });
+
   it("re-reserves the company search field's icon space on the logical side", () => {
     const i = css.indexOf("[data-sk-search-field]");
     expect(i).toBeGreaterThan(-1);
