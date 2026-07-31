@@ -63,29 +63,33 @@ import { useVisits } from "@/lib/hooks/useVisits";
 import { backendVisits } from "@/lib/backend/visits";
 import type { DiscoveryProjectViewModel } from "@/lib/adapters/discovery";
 
-type OnboardScreen = "ob-welcome" | "ob-profile" | "ob-wizard" | "ob-analysis" | "ob-result";
+type OnboardScreen = "ob-welcome" | "ob-profile" | "ob-analysis" | "ob-result";
 type AppScreen = "dashboard" | "recs" | "search" | "visits" | "notifications" | "fav";
 
+/* ---------------------------------------------------------------------------
+   THE ADVISOR QUESTIONNAIRE — two questions (user instruction, 2026-07-31).
+
+   It asks the city and the number of family members, and nothing else. The
+   five questions that used to follow on their own step — budget, property
+   type, bedrooms, moving timeline and housing priorities — plus the financing
+   status that sat on this same step, are no longer asked anywhere in the UI,
+   and the wizard screen they lived on no longer exists.
+
+   NOTHING BEHIND THE UI CHANGED. `Preferences` still carries all ten fields
+   and `DEFAULT_PREFS` still supplies each removed one (`wBudget: 2000000`,
+   `wType: ""`, `wBeds: 0`, `wTimeline: ""`, `wLifestyle: {}`, `pFinance: ""`),
+   so anything reading a preference keeps getting a value of the type it
+   expects — see `lib/demo/discoveryFixtures.ts`, deliberately untouched.
+
+   Those values reach no request: `useDiscoveryProjects` / `useDiscoveryRecommendation`
+   send `GET /api/discovery/projects` and `GET /api/discovery/recommendations`
+   with no preference payload at all, and `prefs` is applied afterwards, in the
+   browser, by the adapter's own match scoring. So there is no API request,
+   response, or AI call whose shape this can alter — the questionnaire is
+   purely what the local scorer is given.
+   --------------------------------------------------------------------------- */
 const CITY_OPTS = ["الرياض", "جدة", "الدمام", "مكة"];
 const FAMILY_OPTS: [string, number][] = [["1-2", 2], ["3-4", 4], ["5-6", 6], ["7+", 7]];
-const FINANCE_OPTS = ["كاش", "تمويل بنكي", "موافقة مبدئية"];
-
-interface WizQuestion {
-  kind: "slider" | "single" | "multi";
-  key: keyof Preferences;
-  title: string;
-  sub: string;
-  options?: [string, string | number][];
-  multiOptions?: string[];
-}
-
-const WIZ_QUESTIONS: WizQuestion[] = [
-  { kind: "slider", key: "wBudget", title: "ما ميزانيتك التقريبية؟", sub: "اسحب لتحديد الحد الأقصى المناسب لك." },
-  { kind: "single", key: "wType", title: "ما نوع العقار المفضّل؟", sub: "اختر ما يناسب أسلوب حياتك.", options: [["فيلا", "فيلا"], ["شقة", "شقة"], ["دوبلكس", "دوبلكس"], ["تاون هاوس", "تاون هاوس"]] },
-  { kind: "single", key: "wBeds", title: "كم عدد غرف النوم المطلوبة؟", sub: "الحد الأدنى الذي تحتاجه.", options: [["غرفتان", 2], ["3 غرف", 3], ["4 غرف", 4], ["5 غرف فأكثر", 5]] },
-  { kind: "single", key: "wTimeline", title: "متى تخطّط للانتقال؟", sub: "يساعدنا في ترتيب الأولويات.", options: [["خلال 3 أشهر", "خلال 3 أشهر"], ["خلال 6 أشهر", "خلال 6 أشهر"], ["خلال سنة", "خلال سنة"], ["ما زلت أستكشف", "ما زلت أستكشف"]] },
-  { kind: "multi", key: "wLifestyle", title: "ما أولوياتك في السكن؟", sub: "اختر كل ما يهمّك — يمكنك اختيار أكثر من خيار.", multiOptions: ["قريب من العمل", "قريب من المدارس", "فخامة", "منطقة هادئة", "استثمار", "حديقة كبيرة", "منزل ذكي", "قريب من الخدمات"] },
-];
 
 const card: React.CSSProperties = { background: "var(--n-surface)", border: "1px solid var(--n-border)", borderRadius: "var(--r-lg)", boxShadow: "var(--sh-1)" };
 const btnPrimary: React.CSSProperties = { fontSize: 14.5, fontWeight: 600, padding: "13px 24px", border: "none", borderRadius: "var(--r-md)", background: "var(--g-900)", color: "var(--t-on-dark)", cursor: "pointer" };
@@ -111,7 +115,6 @@ function DiscoveryScreenInner() {
   const [phase, setPhase] = useState<"onboarding" | "app">(() => (loadPrefs().recReady ? "app" : "onboarding"));
   const [obScreen, setObScreen] = useState<OnboardScreen>("ob-welcome");
   const [appScreen, setAppScreen] = useState<AppScreen>("dashboard");
-  const [wizStep, setWizStep] = useState(0);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [visitsTab, setVisitsTab] = useState<"upcoming" | "completed" | "cancelled">("upcoming");
   const [prefEditorOpen, setPrefEditorOpen] = useState(false);
@@ -249,10 +252,10 @@ function DiscoveryScreenInner() {
   const visitList = upcomingVisits.filter((v) => v.bucket === visitsTab);
   const upcomingCount = upcomingVisits.filter((v) => v.bucket === "upcoming").length;
 
-  const q = WIZ_QUESTIONS[wizStep];
-  const wizHasVal = q.kind === "slider" ? true : q.kind === "multi" ? Object.values(prefs.wLifestyle).some(Boolean) : (q.key === "wBeds" ? prefs.wBeds > 0 : !!prefs[q.key]);
-  const isLastWiz = wizStep === WIZ_QUESTIONS.length - 1;
-  const profileOk = prefs.pCity && prefs.pFamily && prefs.pFinance;
+  /** Both questions answered. `pFinance` was the third condition until the
+      financing question was removed; requiring it now would make the only
+      button on the questionnaire permanently disabled. */
+  const profileOk = prefs.pCity && prefs.pFamily;
 
   /**
    * ─── The `hero` guard. It must come BEFORE the first dereference. ──────────
@@ -394,7 +397,7 @@ function DiscoveryScreenInner() {
                 مرحباً {user?.name?.split(" ")[0] ?? "بك"}، أنا مستشارك العقاري الذكي
               </h1>
               <p style={{ fontSize: 15.5, color: "var(--t-on-dark-soft)", lineHeight: 1.8, margin: "0 auto 36px", maxWidth: 440 }}>
-                سأطرح عليك بضعة أسئلة سريعة عن ميزانيتك واحتياجاتك، ثم أحلّلها فوراً لأرشّح لك أنسب مشروع سكني — بدقّة تفوق التصفّح العشوائي.
+                سأطرح عليك سؤالين سريعين عن مدينتك وعدد أفراد عائلتك، ثم أحلّلهما فوراً لأرشّح لك أنسب مشروع سكني — بدقّة تفوق التصفّح العشوائي.
               </p>
               {/* On-dark variant: the navy primary fill this button used
                   disappeared into the navy hero behind it. */}
@@ -425,7 +428,7 @@ function DiscoveryScreenInner() {
               {obScreen === "ob-profile" && (
                 <>
                   <div style={{ textAlign: "center", marginBottom: 28 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--a-700)" }}>الخطوة 1 من 3 · إكمال الملف</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--a-700)" }}>الخطوة 1 من 2 · إكمال الملف</div>
                     <h1 style={{ fontSize: 28, fontWeight: 700, margin: "10px 0 8px" }}>لنتعرّف عليك</h1>
                     <p style={{ fontSize: 15, color: "var(--t-secondary)", margin: 0 }}>معلومات أساسية تساعد مساعد سكن الذكي على فهم احتياجك.</p>
                   </div>
@@ -439,79 +442,20 @@ function DiscoveryScreenInner() {
                       </div>
                     </div>
                     <div>
-                      <span style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8 }}>حجم العائلة</span>
+                      <span style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8 }}>عدد أفراد العائلة</span>
                       <div style={{ display: "flex", gap: 8 }}>
                         {FAMILY_OPTS.map(([label, val]) => (
                           <button key={label} onClick={() => persistPrefs({ ...prefs, pFamily: val })} style={pillBtn(prefs.pFamily === val)}>{label}</button>
                         ))}
                       </div>
                     </div>
-                    <div>
-                      <span style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8 }}>حالة التمويل</span>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
-                        {FINANCE_OPTS.map((f) => (
-                          <button key={f} onClick={() => persistPrefs({ ...prefs, pFinance: f })} style={{ ...pillBtn(prefs.pFinance === f), fontSize: 13 }}>{f}</button>
-                        ))}
-                      </div>
-                    </div>
                   </div>
+                  {/* This was "متابعة" into the five-question wizard step. With
+                      the questionnaire down to these two questions, it starts
+                      the analysis directly — the same `startAnalysis()` the
+                      wizard's last question used to call, unchanged. */}
                   <div style={{ marginTop: 24 }}>
-                    <button disabled={!profileOk} onClick={() => setObScreen("ob-wizard")} style={{ ...btnPrimary, opacity: profileOk ? 1 : 0.5, cursor: profileOk ? "pointer" : "not-allowed" }}>متابعة</button>
-                  </div>
-                </>
-              )}
-
-              {obScreen === "ob-wizard" && (
-                <>
-                  <div style={{ textAlign: "center", marginBottom: 28 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--a-700)" }}>الخطوة 2 من 3 · تفضيلات السكن</div>
-                    <h1 style={{ fontSize: 27, fontWeight: 700, margin: "10px 0 8px" }}>{q.title}</h1>
-                    <p style={{ fontSize: 15, color: "var(--t-secondary)", margin: 0 }}>{q.sub}</p>
-                  </div>
-                  {q.kind === "single" && (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 12 }}>
-                      {q.options!.map(([label, val]) => {
-                        const selected = prefs[q.key] === val;
-                        return (
-                          <button key={label} onClick={() => persistPrefs({ ...prefs, [q.key]: val } as Preferences)}
-                            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: 18, border: `1.5px solid ${selected ? "var(--g-500)" : "var(--n-border-strong)"}`, borderRadius: "var(--r-lg)", background: selected ? "var(--g-50)" : "var(--n-surface)", fontSize: 15.5, fontWeight: 600, cursor: "pointer", textAlign: "right" }}>
-                            {label}{selected && " ✓"}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {q.kind === "slider" && (
-                    <div style={{ ...card, padding: "32px 26px", textAlign: "center" }}>
-                      <div style={{ fontSize: 36, fontWeight: 700, color: "var(--g-700)" }}>{money(prefs.wBudget)}</div>
-                      <div style={{ fontSize: 13, color: "var(--t-tertiary)", margin: "4px 0 26px" }}>الحد الأقصى للميزانية</div>
-                      <input type="range" min={500000} max={4000000} step={100000} value={prefs.wBudget} onChange={(e) => setPrefs({ ...prefs, wBudget: +e.target.value })} onMouseUp={() => savePrefs(prefs)} onTouchEnd={() => savePrefs(prefs)} style={{ width: "100%", accentColor: "var(--g-600)" }} />
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--t-tertiary)", marginTop: 8 }}><span>500 ألف</span><span>4 مليون</span></div>
-                    </div>
-                  )}
-                  {q.kind === "multi" && (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center" }}>
-                      {q.multiOptions!.map((o) => {
-                        const selected = !!prefs.wLifestyle[o];
-                        return (
-                          <button key={o} onClick={() => persistPrefs({ ...prefs, wLifestyle: { ...prefs.wLifestyle, [o]: !selected } })}
-                            style={{ padding: "12px 18px", border: `1.5px solid ${selected ? "var(--g-900)" : "var(--n-border-strong)"}`, borderRadius: "var(--r-full)", background: selected ? "var(--g-900)" : "var(--n-surface)", color: selected ? "var(--t-on-dark)" : "var(--t-secondary)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-                            {selected && "✓ "}{o}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 30 }}>
-                    <button onClick={() => (wizStep === 0 ? setObScreen("ob-profile") : setWizStep(wizStep - 1))} style={btnGhost}>السابق</button>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      {WIZ_QUESTIONS.map((_, i) => (
-                        <span key={i} style={{ width: i === wizStep ? 24 : 7, height: 7, borderRadius: "var(--r-full)", background: i < wizStep ? "var(--g-600)" : i === wizStep ? "var(--a-500)" : "var(--n-border-strong)" }} />
-                      ))}
-                    </div>
-                    <button disabled={!wizHasVal} onClick={() => (wizHasVal ? (isLastWiz ? startAnalysis() : setWizStep(wizStep + 1)) : undefined)} style={{ ...btnPrimary, padding: "13px 26px", opacity: wizHasVal ? 1 : 0.5, cursor: wizHasVal ? "pointer" : "not-allowed" }}>
-                      {isLastWiz ? "تحليل احتياجاتي" : "التالي"}
-                    </button>
+                    <button disabled={!profileOk} onClick={() => (profileOk ? startAnalysis() : undefined)} style={{ ...btnPrimary, opacity: profileOk ? 1 : 0.5, cursor: profileOk ? "pointer" : "not-allowed" }}>تحليل احتياجاتي</button>
                   </div>
                 </>
               )}
@@ -597,9 +541,11 @@ function DiscoveryScreenInner() {
 
                 {/* 2 — the recommendation the consultant produced. */}
                 <div style={{ marginTop: 40 }}>
+                  {/* The hint named the four answers the questionnaire no longer
+                      collects, so it claimed a basis the resident never gave. */}
                   <SectionHeading
                     title="التوصية التي وصل إليها المستشار"
-                    hint="مبنية على المدينة والميزانية ونوع العقار وعدد الغرف التي سجّلتها."
+                    hint="مبنية على المدينة وعدد أفراد العائلة التي سجّلتها."
                     action={
                       <button
                         onClick={() => goApp("recs")}
@@ -723,11 +669,15 @@ function DiscoveryScreenInner() {
                 <h1 style={{ fontSize: 28, fontWeight: 700, margin: "6px 0" }}>أفضل تطابق لاحتياجاتك</h1>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 10, margin: "20px 0 24px" }}>
                   <button onClick={() => setPrefEditorOpen(true)} style={{ ...btnGhost, borderRadius: "var(--r-full)", fontSize: 13.5, padding: "9px 16px" }}>عدّل تفضيلاتك</button>
+                  {/* Echoes what the resident actually answered. The budget /
+                      type / rooms pills were dropped with their questions: they
+                      would otherwise have shown `DEFAULT_PREFS` — a "2 مليون ر.س"
+                      budget nobody entered, and two empty dashes. */}
                   {[
                     { icon: <PinIcon size={14} />, k: "المدينة", v: prefs.pCity || "—" },
-                    { icon: <WalletIcon size={14} />, k: "الميزانية", v: money(prefs.wBudget) },
-                    { icon: <BuildingIcon size={14} />, k: "النوع", v: prefs.wType || "—" },
-                    { icon: <BedIcon size={14} />, k: "الغرف", v: prefs.wBeds ? String(prefs.wBeds) : "—" },
+                    // No icon: the shared set has no people glyph, and `MetaPill`
+                    // already renders without one (see ReportJourneyScreen).
+                    { icon: undefined, k: "أفراد العائلة", v: prefs.pFamily ? String(prefs.pFamily) : "—" },
                   ].map((c) => (
                     <MetaPill key={c.k} icon={c.icon} label={`${c.k}: `} value={c.v} />
                   ))}
@@ -982,9 +932,16 @@ function DiscoveryScreenInner() {
                 {["الرياض", "جدة", "الدمام", "الخبر"].map((c) => <option key={c}>{c}</option>)}
               </select>
             </label>
+            {/* The budget slider that sat here was the financing/budget
+                question in a second place, so it went with the question. The
+                editor now edits only what the questionnaire asks. */}
             <div style={{ marginBottom: 14 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}><span style={{ display: "flex", alignItems: "center", gap: 7 }}><WalletIcon size={14} /> الميزانية</span><span style={{ color: "var(--a-700)" }}>{money(prefs.wBudget)}</span></div>
-              <input type="range" min={500000} max={4000000} step={100000} value={prefs.wBudget} onChange={(e) => setPrefs({ ...prefs, wBudget: +e.target.value })} style={{ width: "100%", accentColor: "var(--g-600)" }} />
+              <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>عدد أفراد العائلة</span>
+              <div style={{ display: "flex", gap: 8 }}>
+                {FAMILY_OPTS.map(([label, val]) => (
+                  <button key={label} onClick={() => setPrefs({ ...prefs, pFamily: val })} style={{ ...pillBtn(prefs.pFamily === val), padding: "9px 0", fontSize: 13 }}>{label}</button>
+                ))}
+              </div>
             </div>
             <button
               disabled={prefSaving}

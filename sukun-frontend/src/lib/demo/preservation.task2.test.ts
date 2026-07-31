@@ -69,7 +69,12 @@ describe("no fixture was deleted, renamed, moved or rewritten", () => {
       ["components/homeowner/WarrantyCenterScreen.tsx", ["const COVERAGE:", "const INFO:", "const FAQ:"]],
       ["components/homeowner/OwnerOnboardingScreen.tsx", ["const HELP_CARDS", "const UNIT_ROWS", "const CARDS", "const RESULTS"]],
       ["components/homeowner/ProjectDetailsScreen.tsx", ["const GALLERY", "const AMENITIES", "const TIMELINE", "const DEV", "const FAQ"]],
-      ["components/homeowner/DiscoveryScreen.tsx", ["const WIZ_QUESTIONS", "const CITY_OPTS", "const FINANCE_OPTS"]],
+      // `WIZ_QUESTIONS` and `FINANCE_OPTS` were removed DELIBERATELY (user
+      // instruction, 2026-07-31): the advisor questionnaire now asks the city
+      // and the number of family members and nothing else, so the five-question
+      // wizard step and the financing question no longer exist. `CITY_OPTS` and
+      // `FAMILY_OPTS` are the two seeds that remain, and they are still pinned.
+      ["components/homeowner/DiscoveryScreen.tsx", ["const CITY_OPTS", "const FAMILY_OPTS"]],
       ["lib/ai/mock.ts", ["DEFECT_LIBRARY"]],
       ["components/demo/DemoRoleSwitcher.tsx", ["export function DemoRoleSwitcher"]],
     ];
