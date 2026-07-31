@@ -39,10 +39,33 @@ import { toArabicIndic } from "@/lib/numeral";
 import { useInViewport, useIsMobile } from "@/lib/hooks/useViewport";
 import { SCREEN_PATHS as PATHS } from "@/lib/nav/routes";
 
-const NAV_SECTIONS: [string, string][] = [
-  ["overview", "نظرة عامة"], ["gallery", "المعرض"], ["snapshot", "لمحة"], ["why", "لماذا رُشّح"],
-  ["report", "تقرير المستشار"], ["location", "الموقع"], ["developer", "المطوّر"], ["timeline", "الجدول"],
-  ["units", "الوحدات"], ["compare", "المقارنة"], ["book", "الحجز"], ["faq", "الأسئلة"],
+/**
+ * The section tab row. Twelve tabs is a desktop row; on a 390px phone it was a
+ * scroller nobody reaches the end of, and it sat directly under the header, so
+ * two bands of chrome pushed the photograph off the first screen.
+ *
+ * `essential` marks the five a buyer actually navigates by — what it looks
+ * like, where it is, what is for sale, and how to book — and only those five
+ * render below `md`. THE SECTIONS THEMSELVES ARE UNTOUCHED: all twelve are
+ * still on the page, in the same order, and still reached by scrolling, by a
+ * `#sec-` deep link and by every in-page button that targets them (the
+ * overview's "لماذا رُشّح لي؟", the sticky bar's "قارن"). Nothing is removed
+ * from the page — only the tab row is shortened, which is the pattern the
+ * brief's own reference apps use. Desktop renders all twelve, unchanged.
+ */
+const NAV_SECTIONS: { id: string; label: string; essential?: true }[] = [
+  { id: "overview", label: "نظرة عامة", essential: true },
+  { id: "gallery", label: "المعرض", essential: true },
+  { id: "snapshot", label: "لمحة" },
+  { id: "why", label: "لماذا رُشّح" },
+  { id: "report", label: "تقرير المستشار" },
+  { id: "location", label: "الموقع", essential: true },
+  { id: "developer", label: "المطوّر" },
+  { id: "timeline", label: "الجدول" },
+  { id: "units", label: "الوحدات", essential: true },
+  { id: "compare", label: "المقارنة" },
+  { id: "book", label: "الحجز", essential: true },
+  { id: "faq", label: "الأسئلة" },
 ];
 
 /* ---------------------------------------------------------------------------
@@ -314,12 +337,27 @@ function ProjectDetailsScreenInner({ projectId }: { projectId: string }) {
 
   return (
     <div dir="rtl" data-sk-mobile-fit style={{ minHeight: "100dvh", background: "var(--n-bg)", paddingBottom: 130 }}>
-      <header style={{ position: "sticky", top: 0, zIndex: 70, display: "flex", alignItems: "center", gap: 16, padding: "11px 26px", background: "rgba(246,239,232,.9)", backdropFilter: "blur(12px)", borderBottom: "1px solid var(--n-border)" }}>
-        <button onClick={() => router.push(SCREEN_PATHS.H3_Discovery)} style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 14, fontWeight: 600, color: "var(--t-secondary)", background: "none", border: "none", cursor: "pointer" }}>← العودة</button>
-        <SukunLogo size={40} />
+      {/* HEADER — on a phone this is back · compact logo · favourite, and
+          nothing else (globals.css §9 trims the padding to match).
+
+          It used to carry a fourth control, "احجز زيارة", which cost the band
+          most of its height while duplicating a button the page already shows
+          twice on mobile: the overview's own pair, and the fixed bottom CTA
+          that appears the moment those scroll away (`showStickyCta`). Booking
+          is not made harder to reach — it is reachable in the same two places
+          it already was, and the photograph starts higher up the screen.
+
+          Desktop keeps all four controls and its 40px logo, unchanged. */}
+      <header data-sk-compact-header style={{ position: "sticky", top: 0, zIndex: 70, display: "flex", alignItems: "center", gap: 16, padding: "11px 26px", background: "rgba(246,239,232,.9)", backdropFilter: "blur(12px)", borderBottom: "1px solid var(--n-border)" }}>
+        <button onClick={() => router.push(SCREEN_PATHS.H3_Discovery)} aria-label="العودة" style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 14, fontWeight: 600, color: "var(--t-secondary)", background: "none", border: "none", cursor: "pointer" }}>
+          <span aria-hidden="true">←</span>
+          <span className="sk-only-desktop">العودة</span>
+        </button>
+        <span className="sk-only-desktop" style={{ display: "flex" }}><SukunLogo size={40} /></span>
+        <span className="sk-only-mobile" style={{ display: "flex" }}><SukunLogo size={26} /></span>
         <div style={{ marginInlineStart: "auto", display: "flex", gap: 10 }}>
-          <button onClick={() => void saved.toggle(proj)} aria-label="حفظ" style={{ width: 40, height: 40, border: `1px solid ${isFav ? "var(--err)" : "var(--n-border-strong)"}`, borderRadius: "var(--r-md)", background: isFav ? "var(--err-bg)" : "var(--n-surface)", color: isFav ? "var(--err)" : "var(--t-secondary)", cursor: "pointer" }}>♥</button>
-          <button onClick={() => document.getElementById("sec-book")?.scrollIntoView({ behavior: "smooth" })} style={{ fontSize: 14, fontWeight: 600, padding: "10px 20px", border: "none", borderRadius: "var(--r-md)", background: "var(--g-900)", color: "var(--t-on-dark)", cursor: "pointer" }}>احجز زيارة</button>
+          <button onClick={() => void saved.toggle(proj)} aria-label="حفظ" aria-pressed={isFav} style={{ width: 40, height: 40, border: `1px solid ${isFav ? "var(--err)" : "var(--n-border-strong)"}`, borderRadius: "var(--r-md)", background: isFav ? "var(--err-bg)" : "var(--n-surface)", color: isFav ? "var(--err)" : "var(--t-secondary)", cursor: "pointer" }}>♥</button>
+          <button className="sk-only-desktop" onClick={() => document.getElementById("sec-book")?.scrollIntoView({ behavior: "smooth" })} style={{ fontSize: 14, fontWeight: 600, padding: "10px 20px", border: "none", borderRadius: "var(--r-md)", background: "var(--g-900)", color: "var(--t-on-dark)", cursor: "pointer" }}>احجز زيارة</button>
         </div>
       </header>
 
@@ -328,9 +366,16 @@ function ProjectDetailsScreenInner({ projectId }: { projectId: string }) {
           iPhone the last tab ("تقرير المستشار") simply looked cut off at the
           edge. `data-sk-scroll-row` makes it a deliberate, snapping scroller on
           mobile; the desktop row is unchanged because every tab fits there. */}
-      <nav data-sk-scroll-row style={{ position: "sticky", top: 63, zIndex: 60, display: "flex", gap: 2, padding: "0 22px", background: "rgba(252,248,242,.92)", backdropFilter: "blur(12px)", borderBottom: "1px solid var(--n-border)", overflowX: "auto", whiteSpace: "nowrap" }}>
-        {NAV_SECTIONS.map(([id_, label]) => (
-          <button key={id_} onClick={() => document.getElementById(`sec-${id_}`)?.scrollIntoView({ behavior: "smooth" })} style={{ flex: "none", fontSize: 13.5, fontWeight: 500, padding: "14px 14px", border: "none", background: "none", color: "var(--t-secondary)", cursor: "pointer" }}>{label}</button>
+      <nav data-sk-detail-tabs data-sk-scroll-row style={{ position: "sticky", top: 63, zIndex: 60, display: "flex", gap: 2, padding: "0 22px", background: "rgba(252,248,242,.92)", backdropFilter: "blur(12px)", borderBottom: "1px solid var(--n-border)", overflowX: "auto", whiteSpace: "nowrap" }}>
+        {NAV_SECTIONS.map((s) => (
+          <button
+            key={s.id}
+            className={s.essential ? undefined : "sk-only-desktop"}
+            onClick={() => document.getElementById(`sec-${s.id}`)?.scrollIntoView({ behavior: "smooth" })}
+            style={{ flex: "none", fontSize: 13.5, fontWeight: 500, padding: "14px 14px", border: "none", background: "none", color: "var(--t-secondary)", cursor: "pointer" }}
+          >
+            {s.label}
+          </button>
         ))}
       </nav>
 

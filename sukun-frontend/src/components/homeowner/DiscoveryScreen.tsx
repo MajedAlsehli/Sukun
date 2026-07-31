@@ -40,6 +40,7 @@ import {
   BuildingIcon,
   CalendarIcon,
   CheckIcon,
+  ChevronIcon,
   HeartIcon,
   PinIcon,
   SearchIcon,
@@ -64,7 +65,23 @@ import { backendVisits } from "@/lib/backend/visits";
 import type { DiscoveryProjectViewModel } from "@/lib/adapters/discovery";
 
 type OnboardScreen = "ob-welcome" | "ob-profile" | "ob-analysis" | "ob-result";
-type AppScreen = "dashboard" | "recs" | "search" | "visits" | "notifications" | "fav";
+type AppScreen = "dashboard" | "recs" | "search" | "visits" | "notifications" | "fav" | "profile";
+
+/**
+ * The in-screen states a Home Seeker's bottom tab bar addresses, as
+ * `#fragment`s (`components/nav/HomeownerNav.tsx`). This screen has always
+ * modelled these as local state on ONE route; the fragment only lets the tab
+ * bar — which also renders on `/discovery/[projectId]` — say which one to
+ * open. No route is added: `/discovery` is the same entry it always was, and
+ * reading a fragment on mount is the convention RE4/RE5 already use.
+ */
+const HASH_SCREENS: AppScreen[] = ["dashboard", "recs", "search", "visits", "notifications", "fav", "profile"];
+
+function screenFromHash(): AppScreen | null {
+  if (typeof window === "undefined") return null;
+  const raw = window.location.hash.replace("#", "");
+  return (HASH_SCREENS as string[]).includes(raw) ? (raw as AppScreen) : null;
+}
 
 /* ---------------------------------------------------------------------------
    THE ADVISOR QUESTIONNAIRE — two questions (user instruction, 2026-07-31).
@@ -189,7 +206,40 @@ function DiscoveryScreenInner() {
     }, 70);
   }
 
-  function goApp(screen: AppScreen) { setPhase("app"); setAppScreen(screen); window.scrollTo(0, 0); }
+  function goApp(screen: AppScreen) {
+    setPhase("app");
+    setAppScreen(screen);
+    // Keeps the seeker tab bar's highlight truthful when the screen is
+    // changed from inside the page (a dashboard card, an empty state's CTA)
+    // rather than from the bar. `replaceState` — a tab switch is not a page,
+    // and pushing one would make Back walk backwards through tabs.
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", `#${screen}`);
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    }
+    window.scrollTo(0, 0);
+  }
+
+  /**
+   * The tab bar links to `/discovery#fav` etc. On `/discovery` that is a
+   * fragment change with no navigation, so nothing re-renders unless this
+   * listens; arriving from `/discovery/[projectId]` it is the initial hash.
+   */
+  useEffect(() => {
+    const apply = () => {
+      const next = screenFromHash();
+      if (!next) return;
+      // A fragment must never jump someone out of an unfinished questionnaire
+      // into the app shell — `recReady` is the same flag `phase`'s initial
+      // state reads, so a half-onboarded session stays where it is.
+      if (!loadPrefs().recReady) return;
+      setPhase("app");
+      setAppScreen(next);
+    };
+    apply();
+    window.addEventListener("hashchange", apply);
+    return () => window.removeEventListener("hashchange", apply);
+  }, []);
   // The "recently viewed" strip is a local browsing record with no Backend
   // equivalent in either mode, so it stays in localStorage — keyed by the
   // fixture's numeric id in Demo Mode, and skipped for a real UUID.
@@ -503,7 +553,9 @@ function DiscoveryScreenInner() {
         )
       ) : (
         <>
-          <header style={{ position: "sticky", top: 0, zIndex: 60, display: "flex", alignItems: "center", gap: 18, padding: "12px 26px", background: "rgba(246,239,232,.9)", backdropFilter: "blur(12px)", borderBottom: "1px solid var(--n-border)" }}>
+          {/* `data-sk-compact-header` trims the inline padding on a phone
+              (globals.css §9). The bar keeps every control it had. */}
+          <header data-sk-compact-header style={{ position: "sticky", top: 0, zIndex: 60, display: "flex", alignItems: "center", gap: 18, padding: "12px 26px", background: "rgba(246,239,232,.9)", backdropFilter: "blur(12px)", borderBottom: "1px solid var(--n-border)" }}>
             <SukunWordmark size={16} />
             {/* 44x44 is the iOS minimum tap target; this was 40x40. */}
             <button onClick={() => goApp("notifications")} aria-label={hasUnread ? "الإشعارات — لديك إشعارات غير مقروءة" : "الإشعارات"} style={{ position: "relative", marginInlineStart: "auto", width: 44, height: 44, border: "none", boxShadow: "inset 0 0 0 1px var(--n-border-strong)", borderRadius: "var(--r-md)", background: "var(--n-surface)", cursor: "pointer", flex: "none", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--t-secondary)" }}>
@@ -519,7 +571,15 @@ function DiscoveryScreenInner() {
             <span className="sk-only-desktop" style={{ fontSize: 13.5, fontWeight: 600 }}>{user?.name ?? "مستفيد"}</span>
           </header>
 
-          <nav data-sk-scroll-row style={{ display: "flex", gap: 4, padding: "10px 26px", borderBottom: "1px solid var(--n-border)", overflowX: "auto" }}>
+          {/* DESKTOP ONLY. On a phone this row addressed the same destinations
+              the bottom tab bar now does, one scroll-row above the content: two
+              stacked navigation bands plus a header before a single card was
+              visible. Desktop has no bottom bar, so it keeps this one. */}
+          {/* `data-sk-scroll-row` is deliberately NOT set: it exists to make a
+              row scrollable BELOW md, and its `display: flex !important` is
+              declared after `.sk-only-desktop`'s `display: none !important`,
+              so keeping both would have left this row on screen on a phone. */}
+          <nav className="sk-only-desktop" style={{ display: "flex", gap: 4, padding: "10px 26px", borderBottom: "1px solid var(--n-border)", overflowX: "auto" }}>
             {navItems.map((n) => (
               <button key={n.id} onClick={() => goApp(n.id)} style={{ fontSize: 13.5, fontWeight: appScreen === n.id ? 700 : 500, padding: "9px 16px", border: "none", borderRadius: "var(--r-full)", background: appScreen === n.id ? "var(--g-900)" : "transparent", color: appScreen === n.id ? "var(--t-on-dark)" : "var(--t-secondary)", cursor: "pointer", whiteSpace: "nowrap" }}>
                 {n.label}{n.badge ? ` (${n.badge})` : ""}
@@ -916,6 +976,61 @@ function DiscoveryScreenInner() {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ── حسابي ───────────────────────────────────────────────────────
+                The seeker tab bar's fifth destination. Every row here already
+                existed and is reached the same way it always was — this only
+                gathers them, because a five-tab bar needs somewhere to put the
+                things that are not a browsing surface, and زياراتي lost its
+                pill when the desktop-only row was hidden on mobile.
+
+                Nothing is invented: no settings this product does not have, no
+                stats, no fields the Backend cannot answer for. The session
+                control is the same `AccountMenu` every other screen hosts. */}
+            {appScreen === "profile" && (
+              <div style={{ maxWidth: 640 }}>
+                <h1 style={{ fontSize: 26, fontWeight: 700, margin: "0 0 18px" }}>حسابي</h1>
+
+                <div style={{ ...card, padding: 20, display: "flex", alignItems: "center", gap: 14, marginBottom: 16 }}>
+                  <span aria-hidden="true" style={{ width: 46, height: 46, borderRadius: "50%", background: "var(--g-900)", color: "var(--t-on-dark)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, flex: "none" }}>
+                    {(user?.name ?? "ب").trim().charAt(0)}
+                  </span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 15.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.name ?? "باحث عن منزل"}</div>
+                    <div style={{ fontSize: 12.5, color: "var(--t-tertiary)", marginTop: 2 }}>باحث عن منزل</div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <button onClick={() => goApp("visits")} style={{ ...card, padding: "16px 18px", display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "start", cursor: "pointer", font: "inherit" }}>
+                    <CalendarIcon size={17} />
+                    <span style={{ fontSize: 14.5, fontWeight: 600 }}>زياراتي</span>
+                    {upcomingCount > 0 && (
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--a-700)", background: "rgba(var(--a-500-rgb), .16)", padding: "3px 9px", borderRadius: "var(--r-full)" }}>{upcomingCount}</span>
+                    )}
+                    <span style={{ marginInlineStart: "auto", display: "flex", color: "var(--t-tertiary)" }}><ChevronIcon size={15} /></span>
+                  </button>
+
+                  <button onClick={() => goApp("notifications")} style={{ ...card, padding: "16px 18px", display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "start", cursor: "pointer", font: "inherit" }}>
+                    <BellIcon size={17} />
+                    <span style={{ fontSize: 14.5, fontWeight: 600 }}>الإشعارات</span>
+                    {hasUnread && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--err)" }} />}
+                    <span style={{ marginInlineStart: "auto", display: "flex", color: "var(--t-tertiary)" }}><ChevronIcon size={15} /></span>
+                  </button>
+
+                  <button onClick={() => setPrefEditorOpen(true)} style={{ ...card, padding: "16px 18px", display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "start", cursor: "pointer", font: "inherit" }}>
+                    <PinIcon size={17} />
+                    <span style={{ fontSize: 14.5, fontWeight: 600 }}>تفضيلات البحث</span>
+                    <span style={{ fontSize: 12.5, color: "var(--t-tertiary)" }}>{prefs.pCity || "—"}</span>
+                    <span style={{ marginInlineStart: "auto", display: "flex", color: "var(--t-tertiary)" }}><ChevronIcon size={15} /></span>
+                  </button>
+                </div>
+
+                <div style={{ marginTop: 18 }}>
+                  <AccountMenu variant="compact" />
+                </div>
               </div>
             )}
           </main>

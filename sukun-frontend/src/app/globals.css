@@ -950,6 +950,36 @@ body[data-sk-cta-bar-present] [data-sk-mobile-fit] {
   }
 }
 
+/* --- 7c. Navigation chrome gives way to the content ----------------------
+   The homeowner screens open with a sticky header, and the project page adds
+   a sticky section-tab row under it. At 390px those two bands plus the bottom
+   tab bar were most of the first screen: on `/discovery/[projectId]` the
+   photograph — the thing a buyer is here for — started below the fold.
+
+   Only the BAND is trimmed. Both screens keep every control they had except
+   the project header's "احجز زيارة", which is duplicated twice over on mobile
+   (the overview's own actions and the fixed bottom CTA that replaces them on
+   scroll), and is removed in the component, not hidden here.
+
+   `[data-sk-detail-tabs]`'s offset has to follow the header it sits under.
+   57px is measured, not assumed: the compact header's tallest child is the
+   favourite button, which §7 above raises to the 44px tap-target floor — so
+   44 + (2 x 6px padding) + the 1px bottom border. (40px, its authored size,
+   would have left the header overlapping the tab row by 4px once scrolled.) */
+@media (max-width: 767px) {
+  [data-sk-compact-header] {
+    padding-block: 6px !important;
+    padding-inline: 14px !important;
+    gap: 10px !important;
+  }
+  [data-sk-detail-tabs] {
+    top: 57px !important;
+  }
+  [data-sk-detail-tabs] button {
+    padding-block: 11px !important;
+  }
+}
+
 /* --- 8. The company search field's icon and its own placeholder ----------
    The four RE search inputs pair an icon at `inset-inline-start: 14px` with
    `padding: 12px 14px 12px 42px` — a PHYSICAL left padding. In this app's RTL
