@@ -96,13 +96,24 @@ async function main(): Promise<void> {
 }
 
 main()
-  .catch((error) => {
-    // Never print the error verbatim: Prisma's connection errors quote the
-    // datasource URL back at you, password included. Redact anything shaped
-    // like one before it reaches a log the whole org can read.
-    const raw = error instanceof Error ? error.message : 'unknown error';
-    const safe = raw.replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"']+/gi, '[redacted-url]');
-    console.error(`preflight: failed — ${safe}`);
+  .catch((error: unknown) => {
+    /**
+     * Prisma's connection errors quote the datasource URL back at you, so the
+     * credential has to be redacted — but the FIRST attempt redacted whole
+     * URLs and printed `preflight: failed —` with nothing after it, which is
+     * useless to whoever has to fix the run. Only the userinfo is secret:
+     * host, port, database and Prisma's own error code are exactly what you
+     * need to diagnose, and none of them is a credential.
+     */
+    const err = error as { name?: string; message?: string; errorCode?: string; code?: string };
+    const redact = (text: string) => text.replace(/:\/\/[^@/\s]*@/g, '://[redacted]@');
+    const code = err.errorCode ?? err.code;
+    const parts = [
+      err.name ?? 'Error',
+      code ? `(${code})` : '',
+      err.message ? redact(err.message).replace(/\s+/g, ' ').slice(0, 400) : '(no message)',
+    ].filter(Boolean);
+    console.error(`preflight: failed — ${parts.join(' ')}`);
     process.exitCode = 1;
   })
   .finally(() => {
