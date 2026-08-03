@@ -28,12 +28,8 @@ afterEach(() => {
 });
 
 /** Re-imports the hook module with `NEXT_PUBLIC_DEMO_MODE` set as requested. */
-async function loadHooks(demo: boolean, showcase = false) {
+async function loadHooks(demo: boolean) {
   vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", demo ? "true" : "false");
-  // The presentation catalogue is OFF for these tests unless a test asks for
-  // it, so every real-mode assertion below keeps describing what the BACKEND
-  // returns — which is the property most of them exist to protect.
-  vi.stubEnv("NEXT_PUBLIC_SHOWCASE_CATALOGUE", showcase ? "true" : "false");
   vi.resetModules();
   return {
     discovery: await import("./useDiscovery"),
@@ -173,46 +169,6 @@ describe("useDiscoveryProjects", () => {
     const { result } = renderHook(() => discovery.useDiscoveryProjects(PREFS, EMPTY_ACTIVITY));
     await waitFor(() => expect(result.current.status).toBe("ready"));
     expect(result.current.projects).toEqual([]);
-  });
-
-  /* ---------------------------------------------------------------------
-     The showcase catalogue (user instruction, 2026-07-31 — presentation).
-     It supplements the Backend's catalogue for the demo; it must never
-     replace it, and it must never paper over a failure.
-     --------------------------------------------------------------------- */
-
-  it("showcase ON supplements the Backend's projects without replacing them", async () => {
-    const { discovery } = await loadHooks(false, true);
-    stub.reply(
-      envelope({
-        items: [
-          { id: "a", name: "أ", city: "الرياض", district: null, description: null, readiness: "READY", amenities: [], developerName: "d", coverImageUrl: null, gallery: [], priceFrom: 2_000_000, priceTo: null, unitTypes: ["فيلا"], unitsAvailableCount: 1, isSaved: true, isCurrentlyDiscoverable: true, createdAt: "" },
-        ],
-        total: 1,
-        page: 1,
-        pageSize: 24,
-      }),
-    );
-    const { result } = renderHook(() => discovery.useDiscoveryProjects(PREFS, EMPTY_ACTIVITY));
-    await waitFor(() => expect(result.current.status).toBe("ready"));
-    const ids = result.current.projects.map((p) => p.id);
-    // The server's own project is still there, unchanged and un-shadowed.
-    expect(ids).toContain("a");
-    // Every added listing is namespaced, so its origin is never ambiguous.
-    const added = ids.filter((id) => id !== "a");
-    expect(added.length).toBeGreaterThan(0);
-    expect(added.every((id) => id.startsWith("showcase-"))).toBe(true);
-    // The printed count matches the rendered list.
-    expect(result.current.total).toBe(result.current.projects.length);
-  });
-
-  it("showcase NEVER hides a failed request behind a full-looking catalogue", async () => {
-    const { discovery } = await loadHooks(false, true);
-    stub.rejectWith(new TypeError("Failed to fetch"));
-    const { result } = renderHook(() => discovery.useDiscoveryProjects(PREFS, EMPTY_ACTIVITY));
-    await waitFor(() => expect(result.current.status).toBe("error"));
-    expect(result.current.projects).toEqual([]);
-    expect(result.current.errorMessage).toBeTruthy();
   });
 
   it("real mode surfaces a 403 without substituting fixtures", async () => {

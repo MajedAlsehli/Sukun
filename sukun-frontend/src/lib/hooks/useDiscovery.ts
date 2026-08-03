@@ -34,11 +34,6 @@ import {
 } from "@/lib/demo/discoveryFixtures";
 import { backendDiscovery, type ListDiscoveryProjectsQuery } from "@/lib/backend/discovery";
 import {
-  isShowcaseId,
-  showcaseProjectById,
-  showcaseProjects,
-} from "@/lib/demo/showcaseCatalogue";
-import {
   toDemoProjectViewModel,
   toProjectDetailViewModel,
   toProjectViewModel,
@@ -101,30 +96,15 @@ export function useDiscoveryProjects(
     return { status: "ready", projects: demo, total: demo.length, errorMessage: null, reload: () => {} };
   }
 
-  const serverProjects = (resource.data?.items ?? []).map((dto) => toProjectViewModel(dto, prefs));
-
-  /**
-   * The Backend's own projects, plus the presentation catalogue
-   * (`lib/demo/showcaseCatalogue.ts`). The server's items are never replaced,
-   * reordered ahead of their rank, or filtered — they are ranked together with
-   * the showcase listings by the same `scoreOf`, so one ordering rule applies
-   * to both. With the showcase off this is exactly the previous expression.
-   */
-  /**
-   * Only merged once the request has actually SUCCEEDED. A network failure, a
-   * 401/403 or a still-loading page keeps its own honest state: padding a
-   * broken catalogue with eleven listings that always render would hide a real
-   * outage behind a page that looks perfectly healthy, and nobody would find
-   * out until a visitor clicked something that needed the server.
-   */
-  const supplementary = resource.status === "ready" ? showcaseProjects(prefs) : [];
-  const projects = [...serverProjects, ...supplementary].sort((a, b) => b.match - a.match);
+  const projects = (resource.data?.items ?? [])
+    .map((dto) => toProjectViewModel(dto, prefs))
+    // Ranked by the user's own stored preferences, exactly as Demo Mode does.
+    .sort((a, b) => b.match - a.match);
 
   return {
     status: resource.status,
     projects,
-    // The count the screen prints has to match the list it renders.
-    total: (resource.data?.total ?? 0) + supplementary.length,
+    total: resource.data?.total ?? 0,
     errorMessage: resource.errorMessage,
     reload: resource.reload,
   };
@@ -143,20 +123,10 @@ export function useDiscoveryProject(
   projectId: string,
   prefs: Preferences,
 ): DiscoveryDetailResult {
-  /**
-   * A showcase id belongs to no server record, so the request is not made at
-   * all — asking the Backend for `showcase-7` would be a guaranteed 404 and a
-   * "project unavailable" screen in the middle of the presentation.
-   */
-  const showcase = useMemo(
-    () => showcaseProjectById(projectId, prefs),
-    [projectId, prefs],
-  );
-
   const resource = useAsyncResource(
     (signal) => backendDiscovery.getProject(projectId, { signal }),
     [projectId],
-    { enabled: !DEMO_MODE && !!projectId && !isShowcaseId(projectId) },
+    { enabled: !DEMO_MODE && !!projectId },
   );
 
   const demo = useMemo(() => {
@@ -173,19 +143,6 @@ export function useDiscoveryProject(
 
   if (DEMO_MODE) {
     return { status: "ready", project: demo, errorMessage: null, notFound: false, reload: () => {} };
-  }
-
-  if (showcase) {
-    return {
-      status: "ready",
-      // No `availableUnits` and no `visitSlots`: a showcase listing has no
-      // real inventory, so the booking form offers nothing to select rather
-      // than offering a slot that cannot be booked.
-      project: { ...showcase, availableUnits: [], visitSlots: [] },
-      errorMessage: null,
-      notFound: false,
-      reload: () => {},
-    };
   }
 
   const notFound =
@@ -312,15 +269,6 @@ export function useSavedProjects(
     async (project: DiscoveryProjectViewModel) => {
       if (DEMO_MODE) {
         onDemoActivityChange(toggleFavStore(Number(project.id)));
-        return;
-      }
-      /**
-       * A showcase listing has no server record to save against, so the heart
-       * is a local override only. Without this the POST 404s and the heart
-       * rolls back under the user's finger with an error message.
-       */
-      if (isShowcaseId(project.id)) {
-        setOverride(project.id, !(overrides.get(project.id) ?? project.isSaved));
         return;
       }
       const id = project.id;
