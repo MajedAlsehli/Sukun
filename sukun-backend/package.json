@@ -17,6 +17,7 @@
     "vercel-build": "prisma generate && tsc -p tsconfig.json",
     "postinstall": "prisma generate",
     "demo:seed": "ts-node --transpile-only src/scripts/demo-seed.ts",
+    "demo:preflight": "ts-node --transpile-only src/scripts/demo-preflight.ts",
     "demo:reset": "ts-node --transpile-only src/scripts/demo-seed.ts --reset",
     "demo:unlock": "ts-node --transpile-only src/scripts/unlock-demo-accounts.ts",
     "demo:normalize": "ts-node --transpile-only src/scripts/normalize-demo-tenant.ts"

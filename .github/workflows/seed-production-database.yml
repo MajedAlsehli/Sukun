@@ -125,10 +125,36 @@ jobs:
             if [ -n "$secret" ]; then echo "::add-mask::$secret"; fi
           done
 
-          # The seed finds its company by "<LABEL>-CR". A wrong label would not
-          # top up the existing tenant — it would create a SECOND one. This is
-          # not a secret and is printed deliberately so the run is auditable.
-          echo "Demo tenant label: ${DEMO_TENANT_LABEL:-SAKN-DEMO (code default)}"
+          # ---------------------------------------------------------------
+          # PREFLIGHT. The seed finds its company by "<LABEL>-CR". A label that
+          # does not match the one the tenant was originally seeded with does
+          # not error — it silently creates a SECOND demo company, and the
+          # catalogue lands in a tenant nobody is looking at.
+          #
+          # So the label is resolved from the DATABASE rather than trusted from
+          # the environment. `demo:preflight` is read-only; it prints the label
+          # to use on stdout and its reasoning on stderr. It exits non-zero only
+          # when the choice is genuinely ambiguous (several demo tenants, none
+          # matching), where guessing could write into the wrong one.
+          # ---------------------------------------------------------------
+          echo "Resolving the demo tenant from the database…"
+          if ! RESOLVED_LABEL="$(npm run --silent demo:preflight)"; then
+            echo "::error::Tenant preflight failed — nothing was written. See the message above."
+            exit 1
+          fi
+          RESOLVED_LABEL="$(printf '%s' "$RESOLVED_LABEL" | tail -n 1 | tr -d '[:space:]')"
+          if [ -z "$RESOLVED_LABEL" ]; then
+            echo "::error::Tenant preflight returned no label — nothing was written."
+            exit 1
+          fi
+
+          if [ "$RESOLVED_LABEL" != "${DEMO_TENANT_LABEL:-SAKN-DEMO}" ]; then
+            echo "::warning::DEMO_TENANT_LABEL was '${DEMO_TENANT_LABEL:-SAKN-DEMO}' but the seeded tenant is '$RESOLVED_LABEL'. Using the existing tenant so the catalogue is topped up rather than duplicated."
+          fi
+
+          # The label is not a secret, and printing it makes the run auditable.
+          export DEMO_TENANT_LABEL="$RESOLVED_LABEL"
+          echo "Demo tenant label: $DEMO_TENANT_LABEL"
           echo "Seeding — connection strings are loaded and masked, and are never printed."
 
           npm run demo:seed
