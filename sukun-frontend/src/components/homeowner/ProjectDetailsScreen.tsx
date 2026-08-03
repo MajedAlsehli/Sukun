@@ -670,13 +670,61 @@ function ProjectDetailsScreenInner({ projectId }: { projectId: string }) {
                     </button>
                   ))}
                 </div>
-                <div style={{ fontWeight: 700, fontSize: 15, margin: "20px 0 12px" }}>3 · الوحدة المختارة: {effectiveUnitLabel}</div>
+                {/* STEP 3 — a real chooser.
+                    This was a read-only line ("3 · الوحدة المختارة: A102"). The
+                    only way to actually pick a unit was to scroll back UP to
+                    `sec-units`, which the booking flow never tells you to do —
+                    and on a phone "احجز زيارة" scrolls you straight PAST it. So
+                    steps 1 and 2 were interactive, step 3 looked like a step but
+                    could not be operated, and the flow dead-ended there.
+                    The units are the same `unitModels` the cards above render
+                    and share the same `bkUnit` state, so choosing in either
+                    place updates the other. */}
+                <div style={{ fontWeight: 700, fontSize: 15, margin: "20px 0 12px" }}>3 · اختر الوحدة</div>
+                {unitModels.length > 0 ? (
+                  <div data-sk-scroll-row style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
+                    {unitModels.map((u) => {
+                      const active = effectiveUnitLabel === u.label;
+                      return (
+                        <button
+                          key={u.label}
+                          onClick={() => setBkUnit(u.label)}
+                          aria-pressed={active}
+                          style={{
+                            flex: "none",
+                            minWidth: 132,
+                            textAlign: "start",
+                            padding: "12px 14px",
+                            border: `1.5px solid ${active ? "var(--g-900)" : "var(--n-border-strong)"}`,
+                            borderRadius: "var(--r-md)",
+                            background: active ? "var(--g-900)" : "var(--n-surface)",
+                            color: active ? "var(--t-on-dark)" : "var(--t-primary)",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <div style={{ fontSize: 14, fontWeight: 700 }}>{DEMO_MODE ? `نموذج ${u.label}` : `الوحدة ${u.label}`}</div>
+                          <div style={{ fontSize: 12, marginTop: 4, color: active ? "var(--t-on-dark-soft)" : "var(--t-tertiary)" }}>
+                            {u.area == null ? MISSING_VALUE : `${u.area} م²`}
+                          </div>
+                          <div style={{ fontSize: 13.5, fontWeight: 700, marginTop: 2, color: active ? "var(--a-300)" : "var(--g-700)" }}>
+                            {u.price == null ? MISSING_VALUE : money(u.price)}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <UnavailableNote>لا توجد وحدات متاحة للحجز في هذا المشروع حالياً.</UnavailableNote>
+                )}
               </div>
               <div style={{ ...card, padding: 22 }}>
                 <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14 }}>ملخّص الزيارة</div>
                 <div style={{ fontSize: 13.5, marginBottom: 6 }}>المشروع: <b>{proj.name}</b></div>
                 <div style={{ fontSize: 13.5, marginBottom: 6 }}>التاريخ: <b>{bkDay ? `${bkDay} ${selectedDay?.month ?? ""}` : "—"}</b></div>
-                <div style={{ fontSize: 13.5, marginBottom: 14 }}>الوقت: <b>{bkTime ?? "—"}</b></div>
+                <div style={{ fontSize: 13.5, marginBottom: 6 }}>الوقت: <b>{bkTime ?? "—"}</b></div>
+                {/* The summary confirmed project, date and time but not the
+                    unit — the one field the booking actually sends. */}
+                <div style={{ fontSize: 13.5, marginBottom: 14 }}>الوحدة: <b>{effectiveUnitLabel}</b></div>
                 <button disabled={!bookingReady || booking.booking} onClick={() => void confirmBooking()} style={{ width: "100%", fontSize: 15, fontWeight: 600, padding: 14, border: "none", borderRadius: "var(--r-md)", background: "var(--g-900)", color: "var(--t-on-dark)", cursor: bookingReady ? "pointer" : "not-allowed", opacity: bookingReady ? 1 : 0.5 }}>تأكيد الحجز</button>
               </div>
             </div>
