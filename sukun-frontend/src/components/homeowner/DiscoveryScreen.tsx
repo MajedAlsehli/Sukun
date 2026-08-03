@@ -106,6 +106,14 @@ function screenFromHash(): AppScreen | null {
    purely what the local scorer is given.
    --------------------------------------------------------------------------- */
 const CITY_OPTS = ["الرياض", "جدة", "الدمام", "مكة"];
+
+/**
+ * The property types the catalogue actually contains, in first-listed order.
+ * Derived so that adding a listing of a new type makes it filterable in the
+ * same edit that adds it, instead of silently being reachable only through
+ * "كل الأنواع".
+ */
+const TYPE_OPTIONS = ["كل الأنواع", ...Array.from(new Set(PROJECTS.map((p) => p.type)))];
 const FAMILY_OPTS: [string, number][] = [["1-2", 2], ["3-4", 4], ["5-6", 6], ["7+", 7]];
 
 const card: React.CSSProperties = { background: "var(--n-surface)", border: "1px solid var(--n-border)", borderRadius: "var(--r-lg)", boxShadow: "var(--sh-1)" };
@@ -804,7 +812,13 @@ function DiscoveryScreenInner() {
                     <label style={{ display: "block", marginBottom: 14 }}>
                       <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>نوع العقار</span>
                       <select value={search.type} onChange={(e) => setSearch({ ...search, type: e.target.value })} style={{ width: "100%", padding: "9px 12px", border: "1.5px solid var(--n-border-strong)", borderRadius: "var(--r-md)" }}>
-                        {["كل الأنواع", "فيلا", "شقة"].map((c) => <option key={c}>{c}</option>)}
+                        {/* Derived from what is actually listed, not a fixed
+                            pair. The hard-coded ["فيلا","شقة"] meant a type the
+                            catalogue gained — تاون هاوس — was returned by the
+                            default "كل الأنواع" but could never be filtered
+                            FOR, which reads as a missing listing rather than a
+                            missing filter option. */}
+                        {TYPE_OPTIONS.map((c) => <option key={c}>{c}</option>)}
                       </select>
                     </label>
                     <div style={{ marginBottom: 14 }}>

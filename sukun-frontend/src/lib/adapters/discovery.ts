@@ -75,6 +75,13 @@ export interface DiscoveryProjectViewModel {
   /** The readiness label the frozen filters compare against. */
   avail: string;
   type: string;
+  /**
+   * One-line positioning copy. Demo-only: the Backend's LIST DTO carries no
+   * per-project description (its `description` is a detail-response field),
+   * so this is `undefined` in real mode and the screen renders nothing rather
+   * than inventing a sentence.
+   */
+  desc?: string;
   grad: string;
   /** `""` = no cover image. Never a stand-in photo. */
   img: string;
@@ -276,6 +283,7 @@ export function toDemoProjectViewModel(
     baths: project.baths,
     avail: project.avail,
     type: project.type,
+    desc: project.desc,
     grad: project.grad,
     img: project.img,
     gallery: project.gallery,

@@ -179,11 +179,15 @@ describe("useDiscoveryProjects", () => {
     expect(result.current.projects).toEqual([]);
   });
 
-  it("Demo Mode renders the six fixtures and makes NO request", async () => {
+  it("Demo Mode renders every fixture and makes NO request", async () => {
+    const { PROJECTS } = await import("@/lib/demo/discoveryFixtures");
     const { discovery } = await loadHooks(true);
     const { result } = renderHook(() => discovery.useDiscoveryProjects(PREFS, EMPTY_ACTIVITY));
     expect(result.current.status).toBe("ready");
-    expect(result.current.projects).toHaveLength(6);
+    // Counted from the catalogue rather than hard-coded at six: the point of
+    // this test is that Demo Mode serves the fixtures WITHOUT a request, and
+    // that claim should not need editing every time a listing is added.
+    expect(result.current.projects).toHaveLength(PROJECTS.length);
     expect(stub.requests).toHaveLength(0);
   });
 });

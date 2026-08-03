@@ -22,6 +22,13 @@ export interface DemoProject {
   baths: number;
   avail: "جاهز" | "قريباً";
   type: string;
+  /**
+   * One-line positioning for the project (2026-07-31). Optional: the six
+   * original fixtures predate it and the REAL `/api/discovery/*` response
+   * carries no equivalent for a list item, so a project without one renders
+   * nothing rather than a placeholder.
+   */
+  desc?: string;
   grad: string;
   /** Cover photo — card thumbnails, hero backdrops, the visit header. */
   img: string;
@@ -53,6 +60,52 @@ export const PROJECTS: DemoProject[] = [
   { id: 4, name: "ضاحية الورود", dev: "شركة معمار", city: "الرياض", district: "حي الملقا", price: 2750000, area: 450, beds: 5, baths: 5, avail: "جاهز", type: "فيلا", grad: "linear-gradient(150deg,#7d582d,#152848)", img: "/projects/p4-cover.jpg", gallery: ["/projects/p4-cover.jpg", "/projects/p4-g1.jpg", "/projects/p4-g2.jpg", "/projects/p4-g3.jpg"], emi: "10,200 ر.س" },
   { id: 5, name: "مجمّع السدرة", dev: "دار السكن", city: "الدمام", district: "حي الفيصلية", price: 1450000, area: 240, beds: 3, baths: 2, avail: "جاهز", type: "شقة", grad: "linear-gradient(150deg,#9c6e39,#3d2c17)", img: "/projects/p5-cover.jpg", gallery: ["/projects/p5-cover.jpg", "/projects/p5-g1.jpg", "/projects/p5-g2.jpg", "/projects/p5-g3.jpg"], emi: "5,400 ر.س" },
   { id: 6, name: "فلل الروضة", dev: "إعمار الوطن", city: "جدة", district: "حي الروضة", price: 3600000, area: 520, beds: 6, baths: 5, avail: "قريباً", type: "فيلا", grad: "linear-gradient(150deg,#5b7bb0,#152848)", img: "/projects/p6-cover.jpg", gallery: ["/projects/p6-cover.jpg", "/projects/p6-g1.jpg", "/projects/p6-g2.jpg", "/projects/p6-g3.jpg"], emi: "13,400 ر.س" },
+
+  /* -------------------------------------------------------------------------
+     CATALOGUE EXTENSION (2026-07-31). The six above are untouched — same ids,
+     same fields, same photography — and these five are appended, so every
+     screen that reads `PROJECTS` (Discovery's browse and search, favourites,
+     H4 project details, H5 the visit header, and the local match scorer the
+     advisor ranks with) picks them up with no change of its own.
+
+     Five developments, five image sets, one development per project: the
+     photography for each listing comes from that development and only that
+     development. Nothing is padded with another project's pictures, and the
+     imagery is the developers' own (ROSHN, NHC) from
+     `Riyadh_Residential_Images` — resized to ~1400px to match the weight of
+     the existing set, not otherwise altered. Every one of these is a Riyadh
+     development, which is why all five sit in الرياض.
+
+     `beds`/`baths`/`area`/`price` are typology-plausible for each product
+     (NHC/ROSHN published unit mixes), not measured facts about a specific
+     unit — this is demo data and the screens label it as such
+     (`PendingBackendBadge`).
+     ------------------------------------------------------------------------- */
+
+  { id: 7, name: "فلل الأصايل", dev: "الوطنية للإسكان", city: "الرياض", district: "حي العارض", price: 2650000, area: 400, beds: 5, baths: 4, avail: "جاهز", type: "فيلا",
+    desc: "فلل مستقلة بواجهات حديثة ومداخل خاصة، على مقربة من المدارس والخدمات اليومية.",
+    grad: "linear-gradient(150deg,#2b3f61,#0d1b34)", img: "/projects/p7-cover.jpg", gallery: ["/projects/p7-cover.jpg", "/projects/p7-g1.jpg", "/projects/p7-g2.jpg", "/projects/p7-g3.jpg"], emi: "9,800 ر.س" },
+
+  { id: 8, name: "سنا الجبيلة", dev: "الوطنية للإسكان", city: "الرياض", district: "حي الجبيلة", price: 1750000, area: 265, beds: 4, baths: 3, avail: "جاهز", type: "تاون هاوس",
+    desc: "تاون هاوس متلاصق بطابقين على ممرّات مشجّرة، يوازن بين مساحة العائلة وحياة الحيّ.",
+    grad: "linear-gradient(150deg,#849bc1,#152848)", img: "/projects/p8-cover.jpg", gallery: ["/projects/p8-cover.jpg", "/projects/p8-g1.jpg", "/projects/p8-g2.jpg", "/projects/p8-g3.jpg"], emi: "6,400 ر.س" },
+
+  { id: 9, name: "رحاب الربى", dev: "الوطنية للإسكان", city: "الرياض", district: "حي الربى", price: 1250000, area: 175, beds: 3, baths: 2, avail: "قريباً", type: "شقة",
+    desc: "شقق ضمن مجتمع متكامل على الوادي، بإطلالات مفتوحة ومساحات خضراء ومسارات مشي.",
+    grad: "linear-gradient(150deg,#3f516f,#08121f)", img: "/projects/p9-cover.jpg", gallery: ["/projects/p9-cover.jpg", "/projects/p9-g1.jpg", "/projects/p9-g2.jpg"], emi: "4,600 ر.س" },
+
+  { id: 10, name: "وارفة", dev: "روشن", city: "الرياض", district: "حي وارفة", price: 2980000, area: 380, beds: 5, baths: 4, avail: "قريباً", type: "فيلا",
+    desc: "مجتمع سكني متكامل بحدائق ومسارات ومرافق رياضية، ووحدات بواجهات نجدية معاصرة.",
+    grad: "linear-gradient(150deg,#b88448,#3d2c17)", img: "/projects/p10-cover.jpg", gallery: ["/projects/p10-cover.jpg", "/projects/p10-g1.jpg", "/projects/p10-g2.jpg", "/projects/p10-g3.jpg"], emi: "11,000 ر.س" },
+
+  /* One image, deliberately. `Riyadh_Residential_Images` holds exactly one
+     photograph of this development, and a gallery is a promise about what you
+     will see — filling the other three slots from a different project's
+     pictures would be the kind of quiet dishonesty the rest of this file
+     avoids. The gallery strip cycles what it is given. */
+  { id: 11, name: "عمائر الجوهرة", dev: "الوطنية للإسكان", city: "الرياض", district: "حي الجوهرة", price: 980000, area: 140, beds: 3, baths: 2, avail: "جاهز", type: "شقة",
+    desc: "شقق مسلّمة في عمائر سكنية بمواقف مخصّصة، الخيار الأنسب لأوّل تملّك.",
+    grad: "linear-gradient(150deg,#5b7bb0,#0d1b34)", img: "/projects/p11-cover.jpg", gallery: ["/projects/p11-cover.jpg"], emi: "3,600 ر.س" },
 ];
 
 export function findProject(id: number): DemoProject {

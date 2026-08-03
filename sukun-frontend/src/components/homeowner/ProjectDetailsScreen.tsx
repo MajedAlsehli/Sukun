@@ -443,6 +443,13 @@ function ProjectDetailsScreenInner({ projectId }: { projectId: string }) {
 
         <section id="sec-snapshot" style={section}>
           <div style={kicker}>لمحة سريعة</div><h2 style={h2}>المعلومات التي تهمّك</h2>
+          {/* The project's own one-line positioning, when it has one. Rendered
+              only if present: the six original fixtures carry none, and the
+              Backend's list DTO has no per-project description at all, so an
+              always-on paragraph would need a sentence invented to fill it. */}
+          {proj.desc && (
+            <p style={{ fontSize: 15, color: "var(--t-secondary)", lineHeight: 1.8, margin: "0 0 18px", maxWidth: 720 }}>{proj.desc}</p>
+          )}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
             {[["المساحة", proj.area == null ? MISSING_VALUE : `${proj.area} م²`], ["الغرف", `${proj.beds ?? MISSING_VALUE} غرف · ${proj.baths ?? MISSING_VALUE} دورات`], ["الجاهزية", proj.avail], ["السعر", r.priceLabel]].map(([label, value]) => (
               <div key={label} style={{ ...card, padding: 20 }}><div style={{ fontSize: 12, color: "var(--t-tertiary)" }}>{label}</div><div style={{ fontSize: 17, fontWeight: 700, marginTop: 3 }}>{value}</div></div>

@@ -330,7 +330,12 @@ describe("Task 3 changed no mock fixture", () => {
       "lib/demo/config.ts": "c8c2ed074323089d63fff1f45d5daf06f14c8efe102f5b98da41b75cdf3c6439",
       "lib/demo/fixtures.ts": "9b8b368be3971e6188ff2aa4aaf9048a2f21b3d974c6b56f9b42c7df92f01db5",
       "lib/demo/mockFetch.ts": "d2786c0262540fffcc61c8310cadc902d8dd81892b7636a671c2e95d83d1191d",
-      "lib/demo/discoveryFixtures.ts": "c99f7ec15c5924de51317d28487b49acd21828c0dc359093bffb544d43d0dbb9",
+      // RE-PINNED 2026-07-31. The catalogue was extended on purpose (user
+      // instruction): five listings appended so the demo reads as a
+      // marketplace. The seed six are unchanged — `preservation.task2.test.ts`
+      // asserts that field by field, which is the guarantee that matters here;
+      // this hash only says "nobody edited this file by accident".
+      "lib/demo/discoveryFixtures.ts": "83c5878c968cf3aa8a12b18f48f6c1a824ba8c6c8df95c98edf965ab8943e548",
       "lib/demo/projectsFixtures.ts": "09b112248279eb841951c235ab0edd7c09c47088aa5e2bd9158db15f26cac51b",
       "components/demo/DemoRoleSwitcher.tsx": "0d16f7cf036bfdad120b166a5e45a2928a78925ef804e2ba3631be71d9a4e296",
       "lib/ai/mock.ts": "33123e00234e4c1990347b7c800e4beb1f9a3e028bcd08e8d55d28b85d609468",

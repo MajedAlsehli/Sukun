@@ -38,7 +38,13 @@ describe("no fixture was deleted, renamed, moved or rewritten", () => {
 
   it("the six seed projects still hold their original values", async () => {
     const { PROJECTS } = await import("./discoveryFixtures");
-    expect(PROJECTS).toHaveLength(6);
+    // The catalogue was EXTENDED on 2026-07-31 (user instruction): five
+    // listings appended so the demo reads as a marketplace rather than a
+    // single villa. What this test protects is unchanged and is the point of
+    // it — the original six are still first, still ids 1-6, and still hold
+    // every original value. New entries may only ever be appended.
+    expect(PROJECTS.length).toBeGreaterThanOrEqual(6);
+    expect(PROJECTS.slice(0, 6).map((p) => p.id)).toEqual([1, 2, 3, 4, 5, 6]);
     expect(PROJECTS[0]).toMatchObject({
       id: 1,
       name: "واحة الياسمين",
@@ -54,7 +60,10 @@ describe("no fixture was deleted, renamed, moved or rewritten", () => {
       img: "/projects/p1-cover.jpg",
       emi: "8,900 ر.س",
     });
-    expect(PROJECTS.map((p) => p.id)).toEqual([1, 2, 3, 4, 5, 6]);
+    // Ids are unique and monotonic, so a later append cannot collide with a
+    // seed id and silently replace one in every localStorage favourites record.
+    expect(new Set(PROJECTS.map((p) => p.id)).size).toBe(PROJECTS.length);
+    expect([...PROJECTS.map((p) => p.id)].sort((a, b) => a - b)).toEqual(PROJECTS.map((p) => p.id));
     // Every project still points at real photography in `public/projects/`.
     for (const p of PROJECTS) {
       expect(p.img).toMatch(/^\/projects\//);
