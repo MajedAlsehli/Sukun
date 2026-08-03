@@ -1144,3 +1144,31 @@ body[data-sk-cta-bar-present] [data-sk-mobile-fit] {
     padding-inline: 42px 14px !important;
   }
 }
+
+/* --- 10. The booking form must clear the fixed bottom nav -----------------
+   MEASURED on production at 390x844: the "تأكيد الحجز" button occupied
+   y 787-838 while the fixed bottom nav occupied y 775-844 at z-index 120.
+   `document.elementFromPoint` at the button's centre returned the nav's
+   "المفضّلة" link — so a real tap hit the navigation, not the button. Nothing
+   was wrong with the handler: the touch never reached it.
+
+   It only reproduces with a real tap. A synthetic `element.click()` skips hit
+   testing entirely and "succeeds" against a fully covered button, which is why
+   this survived earlier checks.
+
+   The booking section's own trailing space is what was missing: it ended flush
+   against the nav's band, so its last control had nowhere to go. Reserving the
+   nav's measured height plus the CTA bar's lets the button scroll clear of
+   both. `BottomStack` publishes those heights from the live elements, so this
+   follows the real bars rather than a guessed constant.
+
+   Mobile only, and layout only — no z-index is changed, no handler is touched,
+   nothing is repositioned, and the desktop rendering has no fixed bottom nav
+   to clear. */
+@media (max-width: 767px) {
+  #sec-book {
+    padding-bottom: calc(
+      var(--sk-bottom-nav-h, 70px) + var(--sk-cta-h, 0px) + var(--sk-stack-gap, 12px) + 24px
+    );
+  }
+}
