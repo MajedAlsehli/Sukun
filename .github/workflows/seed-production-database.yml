@@ -117,6 +117,21 @@ jobs:
             exit 1
           fi
 
+          # It must also BE a connection string. Vercel can hold a variable as
+          # "Sensitive", in which case `vercel pull` returns a placeholder
+          # rather than the value — non-empty, so a presence check passes, and
+          # then Prisma fails much later with a confusing datasource error.
+          # Checking the scheme here turns that into one clear message.
+          # Only the scheme is ever printed; the value is not.
+          case "$DATABASE_URL" in
+            postgres://*|postgresql://*) : ;;
+            *)
+              echo "::error::DATABASE_URL was pulled but is not a postgres connection string (it does not start with postgresql:// or postgres://). Length=${#DATABASE_URL}, starts with: $(printf '%.11s' "$DATABASE_URL"). This is what Vercel returns for a variable marked Sensitive — such a value cannot be read back by 'vercel pull'."
+              echo "::error::Fix: in the Vercel backend project, either un-mark DATABASE_URL as Sensitive, or add DATABASE_URL as a GitHub repository secret and expose it to this job."
+              exit 1
+              ;;
+          esac
+
           # DIRECT_URL is a different matter. `schema.prisma` declares
           # `directUrl = env("DIRECT_URL")`, so Prisma refuses to initialise if
           # the variable is merely ABSENT — but it is used only by
