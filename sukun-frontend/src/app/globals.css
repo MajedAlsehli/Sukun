@@ -1167,8 +1167,8 @@ body[data-sk-cta-bar-present] [data-sk-mobile-fit] {
    to clear. */
 @media (max-width: 767px) {
   #sec-book {
-    padding-bottom: calc(
-      var(--sk-bottom-nav-h, 70px) + var(--sk-cta-h, 0px) + var(--sk-stack-gap, 12px) + 24px
-    );
+    /* The floating CTA no longer renders below `md`, so only the bottom
+       navigation has to be cleared and the `--sk-cta-h` term is gone. */
+    padding-bottom: calc(var(--sk-bottom-nav-h, 70px) + var(--sk-stack-gap, 12px) + 24px);
   }
 }

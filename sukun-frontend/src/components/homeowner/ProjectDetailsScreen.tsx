@@ -307,7 +307,19 @@ function ProjectDetailsScreenInner({ projectId }: { projectId: string }) {
   // A generous top margin so the bar is already gone by the time the first
   // date/time control comes into view, not only once the section's top edge does.
   const [bookingSectionRef, bookingVisible] = useInViewport({ enabled: isMobile, rootMargin: "0px 0px 240px 0px" });
-  const showStickyCta = !isMobile || (!overviewActionsVisible && !bookingVisible);
+  /**
+   * DESKTOP ONLY. The floating CTA is a fixed bar pinned to the bottom of the
+   * viewport, and on a phone it shares that band with the bottom navigation —
+   * two stacked fixed layers sitting over the end of the booking form. Rather
+   * than keep reserving space beneath them, it simply does not render below
+   * `md`: every action it offered is already on the page (the overview's own
+   * pair of buttons, and the booking form the bar scrolls to).
+   *
+   * `--sk-cta-h` follows automatically — `BottomStack` measures the live fixed
+   * element, so with nothing rendered it publishes 0px and every rule that
+   * reserves space for the bar collapses to nothing on its own.
+   */
+  const showStickyCta = !isMobile;
 
   async function confirmBooking() {
     if (!bkDay || !bkTime) return;
