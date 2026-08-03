@@ -97,6 +97,13 @@ jobs:
           # Needed ONLY if an account has to be created. On an existing tenant
           # nothing is created and this can be left unset entirely.
           DEMO_SEED_PASSWORD: ${{ secrets.DEMO_SEED_PASSWORD }}
+          # OPTIONAL fallback. `vercel pull` cannot read back a variable marked
+          # Sensitive in Vercel — it returns the placeholder `[SENSITIVE]` — so
+          # a repository secret is the second supported route. Left unset, the
+          # pulled value is used, which is the preferred path because it keeps
+          # the connection string in exactly one place.
+          DATABASE_URL_SECRET: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL_SECRET: ${{ secrets.DIRECT_URL }}
         run: |
           set -euo pipefail
 
@@ -110,6 +117,19 @@ jobs:
           # shellcheck disable=SC1090
           . "$ENV_FILE"
           set +a
+
+          # A repository secret, when provided, wins over the pulled value.
+          # This is the route for a Vercel variable held as Sensitive, which
+          # `vercel pull` cannot read back.
+          if [ -n "${DATABASE_URL_SECRET:-}" ]; then
+            echo "::add-mask::$DATABASE_URL_SECRET"
+            export DATABASE_URL="$DATABASE_URL_SECRET"
+            echo "Using DATABASE_URL from the repository secret."
+          fi
+          if [ -n "${DIRECT_URL_SECRET:-}" ]; then
+            echo "::add-mask::$DIRECT_URL_SECRET"
+            export DIRECT_URL="$DIRECT_URL_SECRET"
+          fi
 
           # DATABASE_URL is the one variable this genuinely cannot run without.
           if [ -z "${DATABASE_URL:-}" ]; then
