@@ -274,7 +274,20 @@ function ProjectDetailsScreenInner({ projectId }: { projectId: string }) {
   const effectiveUnitLabel = bkUnit || selectedUnit?.label || MISSING_VALUE;
   const selectedDay = days.find((d) => d.n === bkDay);
   const selectedSlot = times.find(([label]) => label === bkTime);
-  const bookingReady = !!bkDay && !!bkTime && (DEMO_MODE || (!!selectedUnit?.unitId && !!selectedDay?.iso && !!selectedSlot?.[2]));
+  /**
+   * The unit the booking will be made against.
+   *
+   * `selectedUnit` is undefined whenever the resident has not picked one — and
+   * the only picker is in `sec-units`, a section ABOVE the booking form that
+   * `احجز زيارة` scrolls straight past. So on production the guard below saw no
+   * unit, `bookingReady` was false, and تأكيد الحجز sat disabled: clicking it
+   * did nothing, sent nothing, and said nothing.
+   *
+   * The first available unit is the fallback, so a resident who never opened
+   * the unit cards can still book. `selectedUnit` still wins when it is set.
+   */
+  const resolvedUnitId = selectedUnit?.unitId ?? proj?.availableUnits?.[0]?.id ?? null;
+  const bookingReady = !!bkDay && !!bkTime && (DEMO_MODE || (!!resolvedUnitId && !!selectedDay?.iso && !!selectedSlot?.[2]));
 
   /**
    * ─── One primary action at a time (mobile) ────────────────────────────────
@@ -308,10 +321,10 @@ function ProjectDetailsScreenInner({ projectId }: { projectId: string }) {
     // Real `POST /api/visits`. The unit is a REAL available unit id from the
     // detail response, never a client-invented one, and the date/time are the
     // real ISO date and the Backend's own slot string.
-    if (!proj || !selectedUnit?.unitId || !selectedDay?.iso || !selectedSlot?.[2]) return;
+    if (!proj || !resolvedUnitId || !selectedDay?.iso || !selectedSlot?.[2]) return;
     const visitId = await booking.book({
       projectId: proj.id,
-      unitId: selectedUnit.unitId,
+      unitId: resolvedUnitId,
       date: selectedDay.iso,
       time: selectedSlot[2],
     });
