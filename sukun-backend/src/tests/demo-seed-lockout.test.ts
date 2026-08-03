@@ -6,10 +6,18 @@ import { seedDemoTenant } from '../scripts/demo-seed';
 //
 // The bug this pins down: `login` checks `lockedUntil` BEFORE it compares the
 // password (auth/auth.service.ts), so an account locked by SEC-007 rejects even
-// the brand-new password the operator just set — with `ACCOUNT_LOCKED`. The
-// upsert reset `passwordHash` and `status` but left `failedLoginAttempts` and
-// `lockedUntil` untouched, so a verification sweep that made a few wrong
-// attempts left the demo unusable and re-seeding looked like it had failed.
+// a correct password — with `ACCOUNT_LOCKED`. The seed cleared neither counter,
+// so a verification sweep that made a few wrong attempts left the demo unusable
+// and re-seeding looked like it had failed.
+//
+// PRODUCTION-SAFETY CHANGE (2026-07-31). The seed used to ALSO rewrite
+// `passwordHash` on every run. That is fine when it owns a throwaway tenant and
+// unacceptable when it is run against production to top up the catalogue: it
+// silently invalidates logins people are already using. These tests now pin the
+// opposite guarantee — an existing account keeps its hash, a password is
+// written only when an account is CREATED — while still pinning the lockout
+// clear, which restores access to the credential the account already had rather
+// than granting a new one.
 //
 // A Prisma double is used deliberately: this asserts what the seed WRITES, and
 // must not depend on a live database or on the demo tenant's current state.
@@ -17,8 +25,9 @@ import { seedDemoTenant } from '../scripts/demo-seed';
 
 type Row = Record<string, unknown>;
 
-function makeDb() {
-  const userUpserts: Array<{ where: Row; update: Row; create: Row }> = [];
+function makeDb(existingUser: Row | null = null) {
+  const userUpdates: Array<{ where: Row; data: Row }> = [];
+  const userCreates: Array<{ data: Row }> = [];
 
   const table = (rows: Row[] = []) => ({
     findUnique: jest.fn().mockResolvedValue(rows[0] ?? null),
@@ -40,9 +49,16 @@ function makeDb() {
     company: { ...table(), upsert: jest.fn().mockResolvedValue({ id: 'company-1', name: 'demo' }) },
     user: {
       ...table(),
-      upsert: jest.fn().mockImplementation(async (args: { where: Row; update: Row; create: Row }) => {
-        userUpserts.push(args);
-        return { id: `user-${userUpserts.length}`, ...args.create };
+      // `existingUser` decides which branch the seed takes: a row means the
+      // account is already there (update path), null means it must be created.
+      findUnique: jest.fn().mockImplementation(async () => existingUser),
+      update: jest.fn().mockImplementation(async (args: { where: Row; data: Row }) => {
+        userUpdates.push(args);
+        return { id: `user-${userUpdates.length}`, ...args.data };
+      }),
+      create: jest.fn().mockImplementation(async (args: { data: Row }) => {
+        userCreates.push(args);
+        return { id: `user-${userCreates.length}`, ...args.data };
       }),
     },
     contractorOrganization: table(),
@@ -70,59 +86,66 @@ function makeDb() {
     reportTimelineEvent: table(),
   };
 
-  return { db, userUpserts };
+  return { db, userUpdates, userCreates };
 }
 
-describe('demo seed — a rerun restores access, not just the password', () => {
-  it('resets the password AND clears the lockout state on every existing account', async () => {
-    const { db, userUpserts } = makeDb();
+describe('demo seed — a rerun restores access without touching credentials', () => {
+  it('NEVER rewrites the password of an account that already exists', async () => {
+    const { db, userUpdates } = makeDb({ id: 'u1', email: 'company@sakn-demo.sa', passwordHash: 'existing-hash' });
 
-    await seedDemoTenant('a-new-strong-password', db as never);
+    await seedDemoTenant('a-brand-new-password', db as never);
 
-    expect(userUpserts.length).toBeGreaterThanOrEqual(5);
-
-    for (const call of userUpserts) {
-      const update = call.update as {
-        passwordHash?: string;
-        status?: string;
-        failedLoginAttempts?: number;
-        lockedUntil?: Date | null;
-      };
-
-      // The password is re-hashed to the value supplied this run…
-      expect(typeof update.passwordHash).toBe('string');
-      await expect(bcrypt.compare('a-new-strong-password', update.passwordHash as string)).resolves.toBe(true);
-      expect(update.status).toBe('ACTIVE');
-
-      // …and, crucially, the SEC-007 counters are cleared. Without these two,
-      // `login` rejects the new password with ACCOUNT_LOCKED before it ever
-      // compares it.
-      expect(update.failedLoginAttempts).toBe(0);
-      expect(update.lockedUntil).toBeNull();
+    expect(userUpdates.length).toBeGreaterThanOrEqual(5);
+    for (const call of userUpdates) {
+      // The whole point: the seed does not carry a password into the update.
+      expect(call.data).not.toHaveProperty('passwordHash');
     }
   });
 
-  it('supersedes the previous password rather than leaving both valid', async () => {
-    const { db, userUpserts } = makeDb();
+  it('still clears the SEC-007 lockout on every existing account', async () => {
+    const { db, userUpdates } = makeDb({ id: 'u1', email: 'company@sakn-demo.sa', passwordHash: 'existing-hash' });
 
-    await seedDemoTenant('second-run-password', db as never);
+    await seedDemoTenant('irrelevant-because-nothing-is-created', db as never);
 
-    const hash = (userUpserts[0].update as { passwordHash: string }).passwordHash;
-    await expect(bcrypt.compare('second-run-password', hash)).resolves.toBe(true);
-    await expect(bcrypt.compare('a-new-strong-password', hash)).resolves.toBe(false);
+    for (const call of userUpdates) {
+      const data = call.data as { status?: string; failedLoginAttempts?: number; lockedUntil?: Date | null };
+      expect(data.status).toBe('ACTIVE');
+      // Restores access to the EXISTING credential; grants no new one.
+      expect(data.failedLoginAttempts).toBe(0);
+      expect(data.lockedUntil).toBeNull();
+    }
   });
 
-  it('clears lockout on the CREATE path too, by never setting it', async () => {
-    const { db, userUpserts } = makeDb();
+  it('sets the supplied password only on the CREATE path', async () => {
+    const { db, userCreates } = makeDb(null);
 
     await seedDemoTenant('fresh-tenant-password', db as never);
 
-    for (const call of userUpserts) {
-      const create = call.create as { lockedUntil?: unknown; failedLoginAttempts?: unknown };
+    expect(userCreates.length).toBeGreaterThanOrEqual(5);
+    for (const call of userCreates) {
+      const data = call.data as { passwordHash: string; lockedUntil?: unknown; failedLoginAttempts?: unknown };
+      await expect(bcrypt.compare('fresh-tenant-password', data.passwordHash)).resolves.toBe(true);
       // A brand-new row must not carry a lock in from anywhere; the schema
       // defaults are 0 / null and the seed does not override them.
-      expect(create.lockedUntil).toBeUndefined();
-      expect(create.failedLoginAttempts).toBeUndefined();
+      expect(data.lockedUntil).toBeUndefined();
+      expect(data.failedLoginAttempts).toBeUndefined();
     }
+  });
+
+  it('tops up an existing tenant with NO password at all', async () => {
+    // The production case: every account already exists, so nothing needs a
+    // password and the workflow does not have to hold one.
+    const { db, userUpdates, userCreates } = makeDb({ id: 'u1', email: 'company@sakn-demo.sa', passwordHash: 'existing-hash' });
+
+    await expect(seedDemoTenant(null, db as never)).resolves.toBeDefined();
+
+    expect(userCreates).toHaveLength(0);
+    expect(userUpdates.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('refuses to invent a credential when an account must be created', async () => {
+    const { db } = makeDb(null);
+
+    await expect(seedDemoTenant(null, db as never)).rejects.toThrow(/DEMO_SEED_PASSWORD/);
   });
 });

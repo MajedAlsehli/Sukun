@@ -92,6 +92,143 @@ const DOMAIN = env.demo.emailDomain;
 const CR = `${LABEL}-CR`;
 const PROJECT_CODE = `${LABEL}-P1`;
 
+// ---------------------------------------------------------------------------
+// CATALOGUE. `${LABEL}-P1` above is one project, and one project is what
+// Discovery shows: a browse screen with a single card. These five are
+// ADDITIONAL — P1 is never read, updated or referenced by the code that seeds
+// them, so the polished walkthrough hanging off it (its homeowner, units,
+// warranty and five reports) is untouched.
+//
+// Images are RELATIVE paths, deliberately unlike P1's absolute
+// `DEMO_ASSET_BASE_URL` ones: these files ship inside the frontend's own
+// `public/projects/` directory, so the URL resolves against whatever origin
+// serves the app and cannot point at a host that lacks them. They are the
+// developers' own ROSHN/NHC project photography.
+//
+// Price/area/bedrooms/bathrooms are UNIT columns in this schema, not project
+// columns — the API derives `priceFrom` as min(Unit.price) and reads the
+// bedroom/area facts off the detail response's units — so each project carries
+// a small, real unit mix rather than a price written onto the project row.
+// ---------------------------------------------------------------------------
+interface CatalogueUnitSpec {
+  /** Free text, exactly as the `Unit.type` column is defined. */
+  type: string;
+  area: number;
+  bedrooms: number;
+  bathrooms: number;
+  parkingSpots: number;
+  price: number;
+  count: number;
+  /**
+   * AVAILABLE or RESERVED only. OCCUPIED is never set here: the tenant
+   * normalizer's rule is that a unit is occupied only when a real Ownership
+   * backs it, and these projects deliberately create none.
+   */
+  status: UnitStatus;
+}
+
+interface CatalogueProject {
+  codeSuffix: string;
+  name: string;
+  city: string;
+  district: string;
+  description: string;
+  readiness: ProjectReadiness;
+  amenities: string[];
+  coverImage: string;
+  gallery: string[];
+  building: { name: string; number: string; floors: number };
+  units: CatalogueUnitSpec[];
+}
+
+const CATALOGUE: CatalogueProject[] = [
+  {
+    codeSuffix: 'P2',
+    name: 'مشروع فلل الأصايل',
+    city: 'الرياض',
+    district: 'حي العارض',
+    description:
+      'فلل سكنية مستقلة بواجهات نجدية معاصرة ومداخل خاصة، ضمن حيّ متكامل الخدمات على مقربة من المدارس والمراكز التجارية شمال الرياض.',
+    readiness: ProjectReadiness.READY,
+    amenities: ['حديقة خاصة', 'مواقف مظللة', 'أمن ٢٤ ساعة', 'مسار مشاة'],
+    coverImage: '/projects/p7-cover.jpg',
+    gallery: ['/projects/p7-g1.jpg', '/projects/p7-g2.jpg', '/projects/p7-g3.jpg'],
+    building: { name: 'المرحلة الأولى', number: 'A', floors: 2 },
+    units: [
+      { type: 'فيلا 5 غرف', area: 400, bedrooms: 5, bathrooms: 4, parkingSpots: 2, price: 2_650_000, count: 3, status: UnitStatus.AVAILABLE },
+      { type: 'فيلا 6 غرف', area: 455, bedrooms: 6, bathrooms: 5, parkingSpots: 2, price: 2_950_000, count: 2, status: UnitStatus.RESERVED },
+    ],
+  },
+  {
+    codeSuffix: 'P3',
+    name: 'مشروع وارفة',
+    city: 'الرياض',
+    district: 'حي وارفة',
+    description:
+      'مجتمع سكني متكامل بحدائق ومسارات ومرافق رياضية، ووحدات بواجهات حجرية هادئة تناسب العائلات الباحثة عن حيّ مخطط بالكامل.',
+    readiness: ProjectReadiness.UNDER_CONSTRUCTION,
+    amenities: ['حدائق مركزية', 'ملاعب رياضية', 'مسارات دراجات', 'مسجد الحي'],
+    coverImage: '/projects/p10-cover.jpg',
+    gallery: ['/projects/p10-g1.jpg', '/projects/p10-g2.jpg', '/projects/p10-g3.jpg'],
+    building: { name: 'المرحلة الأولى', number: 'A', floors: 2 },
+    units: [
+      { type: 'فيلا 5 غرف', area: 380, bedrooms: 5, bathrooms: 4, parkingSpots: 2, price: 2_980_000, count: 3, status: UnitStatus.AVAILABLE },
+      { type: 'فيلا 4 غرف', area: 330, bedrooms: 4, bathrooms: 4, parkingSpots: 2, price: 2_640_000, count: 2, status: UnitStatus.AVAILABLE },
+    ],
+  },
+  {
+    codeSuffix: 'P4',
+    name: 'مشروع رحاب الربى',
+    city: 'الرياض',
+    district: 'حي الربى',
+    description:
+      'شقق سكنية ضمن مجتمع متكامل على امتداد الوادي، بإطلالات مفتوحة ومساحات خضراء ومسارات مشي تربط المباني بمرافق الحي.',
+    readiness: ProjectReadiness.UNDER_CONSTRUCTION,
+    amenities: ['إطلالة على الوادي', 'مواقف مغطاة', 'مساحات خضراء', 'أمن ٢٤ ساعة'],
+    coverImage: '/projects/p9-cover.jpg',
+    gallery: ['/projects/p9-g1.jpg', '/projects/p9-g2.jpg'],
+    building: { name: 'المبنى أ', number: 'A', floors: 6 },
+    units: [
+      { type: 'شقة 3 غرف', area: 175, bedrooms: 3, bathrooms: 2, parkingSpots: 1, price: 1_250_000, count: 4, status: UnitStatus.AVAILABLE },
+      { type: 'شقة غرفتين', area: 132, bedrooms: 2, bathrooms: 2, parkingSpots: 1, price: 980_000, count: 4, status: UnitStatus.RESERVED },
+    ],
+  },
+  {
+    codeSuffix: 'P5',
+    name: 'مشروع عمائر الجوهرة',
+    city: 'الرياض',
+    district: 'حي الجوهرة',
+    description:
+      'شقق مسلّمة في عمائر سكنية بمواقف مخصّصة ومصاعد، الخيار الأنسب لأوّل تملّك ضمن حيّ قائم وخدمات جاهزة.',
+    readiness: ProjectReadiness.READY,
+    amenities: ['مصاعد', 'مواقف مخصّصة', 'قرب الخدمات'],
+    coverImage: '/projects/p11-cover.jpg',
+    gallery: [],
+    building: { name: 'العمارة ١', number: 'A', floors: 8 },
+    units: [
+      { type: 'شقة 3 غرف', area: 140, bedrooms: 3, bathrooms: 2, parkingSpots: 1, price: 980_000, count: 5, status: UnitStatus.AVAILABLE },
+      { type: 'شقة غرفتين', area: 112, bedrooms: 2, bathrooms: 1, parkingSpots: 1, price: 815_000, count: 3, status: UnitStatus.AVAILABLE },
+    ],
+  },
+  {
+    codeSuffix: 'P6',
+    name: 'مشروع سنا الجبيلة',
+    city: 'الرياض',
+    district: 'حي الجبيلة',
+    description:
+      'تاون هاوس متلاصق بطابقين على ممرّات مشجّرة، يوازن بين مساحة العائلة وقرب الجيرة في حيّ هادئ غرب الرياض.',
+    readiness: ProjectReadiness.READY,
+    amenities: ['ممرات مشجّرة', 'موقف خاص', 'ساحة أطفال', 'أمن ٢٤ ساعة'],
+    coverImage: '/projects/p8-cover.jpg',
+    gallery: ['/projects/p8-g1.jpg', '/projects/p8-g2.jpg', '/projects/p8-g3.jpg'],
+    building: { name: 'المرحلة الأولى', number: 'A', floors: 2 },
+    units: [
+      { type: 'تاون هاوس 4 غرف', area: 265, bedrooms: 4, bathrooms: 3, parkingSpots: 1, price: 1_750_000, count: 4, status: UnitStatus.AVAILABLE },
+      { type: 'تاون هاوس 3 غرف', area: 225, bedrooms: 3, bathrooms: 3, parkingSpots: 1, price: 1_520_000, count: 2, status: UnitStatus.RESERVED },
+    ],
+  },
+];
+
 /** Every identity this tenant owns. `email` is the login. */
 const IDENTITIES = {
   company: { email: `company@${DOMAIN}`, name: 'شركة سكن العقارية (عرض)', phone: '+966500000101' },
@@ -144,7 +281,7 @@ async function promptHidden(question: string): Promise<string> {
   });
 }
 
-async function resolvePassword(): Promise<string> {
+async function resolvePassword(): Promise<string | null> {
   const fromEnv = env.demo.password;
   if (fromEnv) {
     if (fromEnv.length < MIN_DEMO_PASSWORD_LENGTH) {
@@ -156,10 +293,15 @@ async function resolvePassword(): Promise<string> {
   }
 
   if (!process.stdin.isTTY) {
-    throw new Error(
-      'No DEMO_SEED_PASSWORD is set and there is no interactive terminal to prompt on.\n' +
-        'Run: DEMO_SEED_PASSWORD=… npm run demo:seed   (prefix the command with a space so it stays out of shell history)',
-    );
+    /**
+     * No password, no terminal — a CI top-up. This is NOT an error any more:
+     * a password is needed only to CREATE an account, and on an existing
+     * tenant there is nothing to create. If a run does turn out to need one,
+     * `upsertUser` fails at that exact point with a message that names the
+     * account, rather than this refusing up front on a run that never needed
+     * a password at all.
+     */
+    return null;
   }
 
   const first = await promptHidden('Demo account password (input hidden): ');
@@ -278,10 +420,18 @@ interface SeedSummary {
   units: number;
   reports: number;
   reportsAlreadyPresent: boolean;
+  catalogueProjects: number;
+  catalogueUnits: number;
 }
 
-export async function seedDemoTenant(password: string, db: PrismaClient = prisma): Promise<SeedSummary> {
-  const passwordHash = await bcrypt.hash(password, 10);
+export async function seedDemoTenant(
+  password: string | null,
+  db: PrismaClient = prisma,
+): Promise<SeedSummary> {
+  // Hashed once, and only when a password was actually supplied. `null` means
+  // "top-up only": every account that already exists keeps the credential it
+  // already has.
+  const passwordHash = password === null ? null : await bcrypt.hash(password, 10);
 
   const company = await db.company.upsert({
     where: { commercialRegistration: CR },
@@ -298,33 +448,53 @@ export async function seedDemoTenant(password: string, db: PrismaClient = prisma
     role: UserRole,
     companyId: string | null,
   ) {
-    return db.user.upsert({
-      where: { email: identity.email },
-      // Re-running resets the password to the current run's value; it never
-      // reveals or preserves an older one.
-      //
-      // It ALSO clears the SEC-007 lockout counters, and that is not
-      // housekeeping - without it the seed cannot do what it claims. `login`
-      // checks `lockedUntil` BEFORE it compares the password
-      // (auth/auth.service.ts), so a locked account rejects the brand-new
-      // password the operator just set, with `ACCOUNT_LOCKED`. A verification
-      // sweep that made a few wrong attempts would leave the demo unusable
-      // until the lock aged out, and re-seeding would look like it had failed.
-      //
-      // Residual `failedLoginAttempts` matter too even when nothing is locked
-      // yet: an account already at 3 of 5 is two typos away from a 15-minute
-      // lock in the middle of a demo.
-      update: {
-        name: identity.name,
-        phone: identity.phone,
-        role,
-        companyId,
-        passwordHash,
-        status: 'ACTIVE',
-        failedLoginAttempts: 0,
-        lockedUntil: null,
-      },
-      create: {
+    /**
+     * PASSWORDS ARE NEVER REWRITTEN (production-safety change, 2026-07-31).
+     *
+     * This used to set `passwordHash` on the update branch, so every run
+     * rotated the credentials of all six demo accounts. That is acceptable
+     * when the seed OWNS a throwaway tenant; it is not acceptable when the
+     * seed is run against production to top up its catalogue, because it
+     * silently invalidates logins people are already using. An existing
+     * account now keeps the hash it already has, and a password is written
+     * only on the create path.
+     *
+     * The SEC-007 lockout counters are still cleared, and that is deliberately
+     * NOT the same thing. `login` checks `lockedUntil` BEFORE it compares the
+     * password (auth/auth.service.ts), so a locked account rejects even a
+     * correct password with `ACCOUNT_LOCKED`. Clearing it restores access to
+     * the credential the account already had — it never grants access to a
+     * new one. An account sitting at 3 of 5 failed attempts is two typos from
+     * a 15-minute lock in the middle of a demo.
+     */
+    const existing = await db.user.findUnique({ where: { email: identity.email } });
+
+    if (existing) {
+      return db.user.update({
+        where: { email: identity.email },
+        data: {
+          name: identity.name,
+          phone: identity.phone,
+          role,
+          companyId,
+          status: 'ACTIVE',
+          // Lockout state only. `passwordHash` is deliberately absent.
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+        },
+      });
+    }
+
+    if (passwordHash === null) {
+      throw new Error(
+        `Cannot create the demo account ${identity.email}: no DEMO_SEED_PASSWORD was supplied. ` +
+          'A password is required only when an account has to be CREATED. Set DEMO_SEED_PASSWORD ' +
+          'and re-run. (The value itself is never printed.)',
+      );
+    }
+
+    return db.user.create({
+      data: {
         name: identity.name,
         email: identity.email,
         phone: identity.phone,
@@ -626,6 +796,12 @@ export async function seedDemoTenant(password: string, db: PrismaClient = prisma
     electricalTechnicianId: technician2.id,
   });
 
+  // --- The browsable catalogue ---------------------------------------------
+  // BEFORE the early return below: that branch is the re-run path, and seeding
+  // the catalogue after it would mean an existing tenant — the normal case for
+  // a production top-up — never received these projects at all.
+  const catalogue = await seedCatalogue(db, company.id, contractorOrg.id);
+
   // --- Canonical reports ---------------------------------------------------
   const existingReports = await db.report.count({ where: { homeownerId: homeownerUser.id } });
   if (existingReports > 0) {
@@ -636,6 +812,8 @@ export async function seedDemoTenant(password: string, db: PrismaClient = prisma
       units: units.length,
       reports: existingReports,
       reportsAlreadyPresent: true,
+      catalogueProjects: catalogue.projects,
+      catalogueUnits: catalogue.units,
     };
   }
 
@@ -867,7 +1045,122 @@ export async function seedDemoTenant(password: string, db: PrismaClient = prisma
     units: units.length,
     reports: 5,
     reportsAlreadyPresent: false,
+    catalogueProjects: catalogue.projects,
+    catalogueUnits: catalogue.units,
   };
+}
+
+/**
+ * The additional browsable projects (`CATALOGUE`).
+ *
+ * Idempotent in the same style as the rest of this file: each project is found
+ * by its globally-unique `code` and updated in place, its gallery is REPLACED
+ * rather than appended (a re-run must not grow it), and buildings and units are
+ * found by their own unique keys before being created. Running the seed twice
+ * produces identical rows.
+ *
+ * Scope: writes only to projects coded `${LABEL}-P2..P6` and rows beneath them.
+ * `${LABEL}-P1` is never read or written here, and neither is any row outside
+ * this company.
+ *
+ * These projects deliberately carry no project manager, technicians,
+ * ownerships, warranties or reports. They exist to be BROWSED, and inventing a
+ * homeowner or a maintenance history for a project nobody has bought into
+ * would put fabricated operational data in front of the company and PM
+ * dashboards.
+ */
+async function seedCatalogue(
+  db: PrismaClient,
+  companyId: string,
+  primaryContractorId: string,
+): Promise<{ projects: number; units: number }> {
+  let unitCount = 0;
+
+  for (const spec of CATALOGUE) {
+    const code = `${LABEL}-${spec.codeSuffix}`;
+    const data = {
+      companyId,
+      name: spec.name,
+      city: spec.city,
+      district: spec.district,
+      description: spec.description,
+      status: ProjectStatus.ACTIVE,
+      isActive: true,
+      readiness: spec.readiness,
+      amenities: spec.amenities,
+      // Static public asset served by the frontend, not a Supabase object, so
+      // `coverImageKey` stays null and nothing tries to sign or delete it.
+      coverImageUrl: spec.coverImage,
+      primaryContractorId,
+    };
+
+    const existing = await db.project.findUnique({ where: { code } });
+    const project = existing
+      ? await db.project.update({ where: { id: existing.id }, data })
+      : await db.project.create({ data: { ...data, code } });
+
+    // Replace-in-place, scoped to THIS project id only.
+    await db.projectMedia.deleteMany({ where: { projectId: project.id } });
+    if (spec.gallery.length > 0) {
+      await db.projectMedia.createMany({
+        data: spec.gallery.map((url, index) => ({
+          projectId: project.id,
+          url,
+          // Genuine project photography, not a stand-in — so the honest
+          // "no real photo yet" empty state correctly stops showing.
+          isPlaceholder: false,
+          sortOrder: index,
+        })),
+      });
+    }
+
+    const existingBuilding = await db.building.findUnique({
+      where: { projectId_number: { projectId: project.id, number: spec.building.number } },
+    });
+    const building =
+      existingBuilding ??
+      (await db.building.create({
+        data: {
+          projectId: project.id,
+          name: spec.building.name,
+          number: spec.building.number,
+          floors: spec.building.floors,
+          status: 'ACTIVE',
+          isActive: true,
+        },
+      }));
+
+    let ordinal = 0;
+    for (const unit of spec.units) {
+      for (let i = 0; i < unit.count; i += 1) {
+        ordinal += 1;
+        const floor = Math.min(spec.building.floors, Math.ceil(ordinal / 2));
+        const number = `${spec.building.number}${floor}${String(ordinal).padStart(2, '0')}`;
+        const found = await db.unit.findUnique({
+          where: { buildingId_number: { buildingId: building.id, number } },
+        });
+        if (!found) {
+          await db.unit.create({
+            data: {
+              buildingId: building.id,
+              number,
+              floor,
+              type: unit.type,
+              area: unit.area,
+              bedrooms: unit.bedrooms,
+              bathrooms: unit.bathrooms,
+              parkingSpots: unit.parkingSpots,
+              price: unit.price,
+              status: unit.status,
+            },
+          });
+        }
+        unitCount += 1;
+      }
+    }
+  }
+
+  return { projects: CATALOGUE.length, units: unitCount };
 }
 
 function accountList() {
@@ -1056,9 +1349,16 @@ async function main() {
   console.log(`  project:  ${summary.projectId}`);
   console.log(`  units:    ${summary.units}`);
   console.log(
+    `  catalogue: ${summary.catalogueProjects} browsable projects, ${summary.catalogueUnits} units`,
+  );
+  console.log(
     `  reports:  ${summary.reports}${summary.reportsAlreadyPresent ? ' (already present - not duplicated)' : ''}`,
   );
-  console.log('\nAccounts (the password is the one you supplied and is NOT printed):');
+  console.log(
+    '\nAccounts. Existing accounts KEPT their current password — this seed never' +
+      '\nrewrites one. A password is set only when an account has to be created,' +
+      '\nand it is never printed:',
+  );
   for (const account of summary.accounts) {
     console.log(`  ${account.role.padEnd(24)} ${account.email}`);
   }
