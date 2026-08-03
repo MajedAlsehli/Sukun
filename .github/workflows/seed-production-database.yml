@@ -111,13 +111,32 @@ jobs:
           . "$ENV_FILE"
           set +a
 
+          # DATABASE_URL is the one variable this genuinely cannot run without.
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::DATABASE_URL is not set in the production environment. Add it in the Vercel backend project and re-run."
+            exit 1
+          fi
+
+          # DIRECT_URL is a different matter. `schema.prisma` declares
+          # `directUrl = env("DIRECT_URL")`, so Prisma refuses to initialise if
+          # the variable is merely ABSENT — but it is used only by
+          # `prisma migrate deploy`, which needs a real session for advisory
+          # locks and DDL. This workflow runs no migration: the seed is Prisma
+          # Client CRUD, which goes over `url` (the pooled DATABASE_URL). So
+          # when production has not defined one, pointing it at the same
+          # database satisfies the schema without changing what is executed —
+          # exactly what the schema comment prescribes for local development.
+          #
+          # If a migration step is ever added HERE, this default must go: a
+          # transaction pooler cannot serve `migrate deploy`.
+          if [ -z "${DIRECT_URL:-}" ]; then
+            echo "::warning::DIRECT_URL is not set in the production environment. Defaulting it to DATABASE_URL for this run — the seed performs no DDL, so the pooled connection is sufficient."
+            export DIRECT_URL="$DATABASE_URL"
+          fi
+
           # Mask BEFORE any command that could surface a value in a log line.
           for name in DATABASE_URL DIRECT_URL; do
             value="$(printenv "$name" || true)"
-            if [ -z "$value" ]; then
-              echo "::error::$name is not set in the production environment. Add it in the Vercel backend project and re-run."
-              exit 1
-            fi
             echo "::add-mask::$value"
             # A Supabase URL carries the database password in its userinfo
             # field; mask that on its own too, so a partial print is redacted.
