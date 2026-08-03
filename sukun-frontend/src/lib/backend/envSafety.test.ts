@@ -17,7 +17,17 @@ import { describe, expect, it } from "vitest";
 const SRC = join(process.cwd(), "src");
 
 /** The only two environment variables this frontend is allowed to read. */
-const ALLOWED_ENV = ["NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_DEMO_MODE"];
+const ALLOWED_ENV = [
+  "NEXT_PUBLIC_API_URL",
+  "NEXT_PUBLIC_DEMO_MODE",
+  // Presentation-only kill switch for the frontend showcase catalogue
+  // (`lib/demo/showcaseCatalogue.ts`). Carries no credential and changes no
+  // request: it only decides whether fixture listings are merged into the
+  // Backend's own catalogue for the demo. Set to "false" to serve server data
+  // only. The point of this test is that a SECRET never gets a NEXT_PUBLIC_
+  // name, and this one is a boolean feature flag.
+  "NEXT_PUBLIC_SHOWCASE_CATALOGUE",
+];
 
 /** Substrings that would indicate a credential had been given a public name. */
 const SECRET_MARKERS = [
@@ -73,11 +83,11 @@ describe("environment variable safety", () => {
     expect(files.length).toBeGreaterThan(50);
   });
 
-  it("references only the two allowed public variables", () => {
+  it("references only the allowed public variables", () => {
     const unexpected = envReferences().filter((h) => !ALLOWED_ENV.includes(h.name));
     expect(
       unexpected.map((h) => `${h.name} (${h.file})`),
-      "frontend code may only read NEXT_PUBLIC_API_URL and NEXT_PUBLIC_DEMO_MODE",
+      `frontend code may only read ${ALLOWED_ENV.join(", ")}`,
     ).toEqual([]);
   });
 

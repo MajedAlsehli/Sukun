@@ -447,8 +447,13 @@ function ProjectDetailsScreenInner({ projectId }: { projectId: string }) {
               only if present: the six original fixtures carry none, and the
               Backend's list DTO has no per-project description at all, so an
               always-on paragraph would need a sentence invented to fill it. */}
-          {proj.desc && (
-            <p style={{ fontSize: 15, color: "var(--t-secondary)", lineHeight: 1.8, margin: "0 0 18px", maxWidth: 720 }}>{proj.desc}</p>
+          {(proj.desc ?? proj.description) && (
+            <p style={{ fontSize: 15, color: "var(--t-secondary)", lineHeight: 1.8, margin: "0 0 18px", maxWidth: 720 }}>
+              {/* `desc` is the Demo Mode fixture field; `description` is the
+                  REAL detail DTO's own column, which the Backend has always
+                  returned and nothing rendered. Same sentence either way. */}
+              {proj.desc ?? proj.description}
+            </p>
           )}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
             {[["المساحة", proj.area == null ? MISSING_VALUE : `${proj.area} م²`], ["الغرف", `${proj.beds ?? MISSING_VALUE} غرف · ${proj.baths ?? MISSING_VALUE} دورات`], ["الجاهزية", proj.avail], ["السعر", r.priceLabel]].map(([label, value]) => (

@@ -49,6 +49,11 @@ describe("DiscoveryScreen — the hero guard", () => {
    */
   async function loadScreen() {
     vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "false");
+    // Server-only: these tests are about what the screen does with what the
+    // BACKEND sent — its honest empty states and missing-value placeholders.
+    // The presentation catalogue would supply projects of its own, and they
+    // would no longer be testing that.
+    vi.stubEnv("NEXT_PUBLIC_SHOWCASE_CATALOGUE", "false");
     vi.resetModules();
     const [{ DiscoveryScreen }, { AuthProvider }] = await Promise.all([
       import("@/components/homeowner/DiscoveryScreen"),
@@ -132,6 +137,11 @@ describe("TechniciansManagementScreen — no fixture technician in Real Mode", (
 
   it("renders the real records and none of the seed names", async () => {
     vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "false");
+    // Server-only: these tests are about what the screen does with what the
+    // BACKEND sent — its honest empty states and missing-value placeholders.
+    // The presentation catalogue would supply projects of its own, and they
+    // would no longer be testing that.
+    vi.stubEnv("NEXT_PUBLIC_SHOWCASE_CATALOGUE", "false");
     vi.resetModules();
 
     stub.on("POST", "/auth/refresh", () =>
@@ -208,6 +218,11 @@ describe("visit status drives the presentation", () => {
 
   async function renderVisit(status: string) {
     vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "false");
+    // Server-only: these tests are about what the screen does with what the
+    // BACKEND sent — its honest empty states and missing-value placeholders.
+    // The presentation catalogue would supply projects of its own, and they
+    // would no longer be testing that.
+    vi.stubEnv("NEXT_PUBLIC_SHOWCASE_CATALOGUE", "false");
     vi.resetModules();
     stub.on("POST", "/auth/refresh", () =>
       envelope({
@@ -298,6 +313,11 @@ describe("authenticated resources wait for the session", () => {
    */
   async function load() {
     vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "false");
+    // Server-only: these tests are about what the screen does with what the
+    // BACKEND sent — its honest empty states and missing-value placeholders.
+    // The presentation catalogue would supply projects of its own, and they
+    // would no longer be testing that.
+    vi.stubEnv("NEXT_PUBLIC_SHOWCASE_CATALOGUE", "false");
     vi.resetModules();
     return {
       reports: await import("@/lib/hooks/useReports"),
@@ -446,6 +466,11 @@ describe("a CANCELLED visit never reads as upcoming", () => {
 
   it("the screen says «زيارة ملغاة» and offers no visit action", async () => {
     vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "false");
+    // Server-only: these tests are about what the screen does with what the
+    // BACKEND sent — its honest empty states and missing-value placeholders.
+    // The presentation catalogue would supply projects of its own, and they
+    // would no longer be testing that.
+    vi.stubEnv("NEXT_PUBLIC_SHOWCASE_CATALOGUE", "false");
     vi.resetModules();
     stub.on("POST", "/auth/refresh", () =>
       envelope({
@@ -516,6 +541,11 @@ describe("project details asserts nothing the Backend did not send", () => {
    */
   async function renderDetails(opts: { units?: unknown[]; otherProjects?: unknown[] } = {}) {
     vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "false");
+    // Server-only: these tests are about what the screen does with what the
+    // BACKEND sent — its honest empty states and missing-value placeholders.
+    // The presentation catalogue would supply projects of its own, and they
+    // would no longer be testing that.
+    vi.stubEnv("NEXT_PUBLIC_SHOWCASE_CATALOGUE", "false");
     vi.resetModules();
     stub.on("POST", "/auth/refresh", () =>
       envelope({
@@ -626,6 +656,11 @@ describe("project details asserts nothing the Backend did not send", () => {
 describe("AccountMenu", () => {
   async function renderMenu() {
     vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "false");
+    // Server-only: these tests are about what the screen does with what the
+    // BACKEND sent — its honest empty states and missing-value placeholders.
+    // The presentation catalogue would supply projects of its own, and they
+    // would no longer be testing that.
+    vi.stubEnv("NEXT_PUBLIC_SHOWCASE_CATALOGUE", "false");
     vi.resetModules();
     stub.on("POST", "/auth/refresh", () =>
       envelope({
