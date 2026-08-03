@@ -1,0 +1,151 @@
+name: Seed Production Database
+
+# ---------------------------------------------------------------------------
+# MANUAL ONLY. There is deliberately no `push`, `pull_request` or `schedule`
+# trigger: this writes to the production database, and nothing that writes to
+# production should ever fire because someone merged a branch.
+#
+# WHAT IT DOES. Runs `npm run demo:seed`, which tops up the demo tenant's
+# browsable catalogue. The seed is idempotent and additive:
+#   * it adds the catalogue projects (<LABEL>-P2..P6) if they are missing, and
+#     updates them in place if they are not — re-running never duplicates a
+#     project, building, unit or gallery image;
+#   * it NEVER rewrites the password of an account that already exists. A
+#     password is written only when an account has to be CREATED, which on an
+#     existing tenant is never. See `upsertUser` in scripts/demo-seed.ts.
+#   * every write is scoped to the company whose commercialRegistration is
+#     `<LABEL>-CR`. There is no unscoped delete anywhere in the seed.
+#
+# WHERE THE CREDENTIALS COME FROM. Exactly where the deploy workflow gets
+# them: `vercel pull --environment=production` downloads the backend project's
+# own environment variables using VERCEL_TOKEN. `DATABASE_URL`/`DIRECT_URL` are
+# never stored as GitHub Secrets and never appear in this file.
+#
+# SECRET HANDLING. The pulled values are sourced into ONE step's shell and are
+# never written to `$GITHUB_ENV`, never echoed, and registered with
+# `::add-mask::` before anything else runs, so an accidental print is redacted.
+# ---------------------------------------------------------------------------
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type SEED to confirm writing to the PRODUCTION database'
+        required: true
+        default: ''
+
+# One seed at a time. Two concurrent runs against one database would race on
+# the same unique codes.
+concurrency:
+  group: sukun-production-seed
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  seed:
+    name: Seed the production demo tenant
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_BACKEND_PROJECT_ID }}
+
+    steps:
+      - name: Require explicit confirmation
+        run: |
+          if [ "${{ inputs.confirm }}" != "SEED" ]; then
+            echo "::error::Confirmation failed. Re-run and type SEED in the confirm field."
+            exit 1
+          fi
+          echo "Confirmed."
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: sukun-backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: sukun-backend
+        run: npm ci
+
+      - name: Generate Prisma client
+        working-directory: sukun-backend
+        run: npx prisma generate
+
+      - name: Link Vercel project
+        working-directory: sukun-backend
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+      - name: Pull production configuration
+        working-directory: sukun-backend
+        run: npx --yes vercel@latest pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
+
+      # Everything below happens in ONE shell on purpose: the pulled secrets are
+      # sourced into this process only. They never reach $GITHUB_ENV, so no
+      # later step — and no fork of this workflow — can read them.
+      - name: Seed
+        working-directory: sukun-backend
+        env:
+          # Needed ONLY if an account has to be created. On an existing tenant
+          # nothing is created and this can be left unset entirely.
+          DEMO_SEED_PASSWORD: ${{ secrets.DEMO_SEED_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          ENV_FILE=".vercel/.env.production.local"
+          if [ ! -f "$ENV_FILE" ]; then
+            echo "::error::vercel pull produced no $ENV_FILE — check VERCEL_TOKEN and VERCEL_BACKEND_PROJECT_ID."
+            exit 1
+          fi
+
+          set -a
+          # shellcheck disable=SC1090
+          . "$ENV_FILE"
+          set +a
+
+          # Mask BEFORE any command that could surface a value in a log line.
+          for name in DATABASE_URL DIRECT_URL; do
+            value="$(printenv "$name" || true)"
+            if [ -z "$value" ]; then
+              echo "::error::$name is not set in the production environment. Add it in the Vercel backend project and re-run."
+              exit 1
+            fi
+            echo "::add-mask::$value"
+            # A Supabase URL carries the database password in its userinfo
+            # field; mask that on its own too, so a partial print is redacted.
+            secret="$(printf '%s' "$value" | sed -n 's#^[^:]*://[^:]*:\([^@]*\)@.*#\1#p')"
+            if [ -n "$secret" ]; then echo "::add-mask::$secret"; fi
+          done
+
+          # The seed finds its company by "<LABEL>-CR". A wrong label would not
+          # top up the existing tenant — it would create a SECOND one. This is
+          # not a secret and is printed deliberately so the run is auditable.
+          echo "Demo tenant label: ${DEMO_TENANT_LABEL:-SAKN-DEMO (code default)}"
+          echo "Seeding — connection strings are loaded and masked, and are never printed."
+
+          npm run demo:seed
+
+      - name: Report the outcome
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "::notice::SUCCESS — the production demo tenant is seeded. Catalogue projects added or updated in place; no existing account's password was changed."
+          else
+            echo "::error::FAILED — the production database was NOT seeded. The seed is transactional per row and idempotent, so a re-run after fixing the cause is safe."
+          fi
+
+      # The pulled env file holds live production credentials. The runner is
+      # ephemeral, but leaving it lying around for the remaining steps is a
+      # habit worth not having.
+      - name: Remove pulled credentials
+        if: always()
+        working-directory: sukun-backend
+        run: rm -rf .vercel
